@@ -30,7 +30,7 @@ export const PERMISSIONS = {
  * Check if user has permission for a feature
  */
 export function canAccess(userRole: UserRole, feature: keyof typeof PERMISSIONS): boolean {
-  const allowedRoles = PERMISSIONS[feature] as UserRole[];
+  const allowedRoles = PERMISSIONS[feature] as unknown as UserRole[];
   return allowedRoles.includes(userRole);
 }
 
