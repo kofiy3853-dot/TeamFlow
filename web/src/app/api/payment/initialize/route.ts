@@ -1,0 +1,55 @@
+import { NextResponse } from 'next/server';
+import connectToDatabase from '@/lib/mongodb';
+import { Payment } from '@/models/Payment';
+import { User } from '@/models/User';
+import { initializePayment } from '@/lib/paystack';
+import { verifyToken } from '@/lib/auth-node';
+import crypto from 'crypto';
+
+export async function POST(req: Request) {
+  try {
+    await connectToDatabase();
+
+    // Verify authentication
+    const authCookie = req.headers.get('cookie')?.split('token=')[1]?.split(';')[0];
+    if (!authCookie) {
+      return NextResponse.json({ error: 'Unauthorized - Please log in again' }, { status: 401 });
+    }
+
+    const decoded = verifyToken(authCookie) as any;
+    if (!decoded || !decoded.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Amount for subscription (e.g., $10 or 100 GHS)
+    const SUBSCRIPTION_AMOUNT = 100;
+    const reference = crypto.randomBytes(16).toString('hex');
+    const callbackUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000') + `/api/payment/verify?reference=${reference}`;
+
+    // Initialize with Paystack
+    const paystackData = await initializePayment(user.email, SUBSCRIPTION_AMOUNT, reference, callbackUrl);
+
+    // Save payment record as PENDING
+    await Payment.create({
+      user: user._id,
+      amount: SUBSCRIPTION_AMOUNT,
+      provider: 'PAYSTACK',
+      reference,
+      status: 'PENDING',
+    });
+
+    return NextResponse.json({ 
+      authorization_url: paystackData.data.authorization_url,
+      reference: paystackData.data.reference 
+    }, { status: 200 });
+
+  } catch (error: any) {
+    console.error('Payment initialization error:', error);
+    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+  }
+}

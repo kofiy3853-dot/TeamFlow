@@ -1,0 +1,92 @@
+import { NextResponse } from 'next/server';
+import connectToDatabase from '@/lib/mongodb';
+import { Team } from '@/models/Team';
+import { User } from '@/models/User';
+import { getUserFromCookie } from '@/lib/rbac-node';
+
+// GET /api/teams/[id]/members - list members
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const user = getUserFromCookie(req);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    await connectToDatabase();
+    const { id } = await params;
+
+    const team = await Team.findById(id)
+      .populate('owner', 'fullname email role')
+      .populate('members', 'fullname email role')
+      .populate('admins', 'fullname email role');
+
+    if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+
+    return NextResponse.json({ team });
+  } catch (error) {
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// PATCH /api/teams/[id]/members - update member role
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const user = getUserFromCookie(req);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    await connectToDatabase();
+    const { id } = await params;
+    const { userId, role } = await req.json();
+
+    if (!['OWNER', 'ADMIN', 'MEMBER'].includes(role)) {
+      return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+    }
+
+    const team = await Team.findById(id);
+    if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+
+    if (team.owner.toString() !== user.userId) {
+      return NextResponse.json({ error: 'Only the team owner can change roles' }, { status: 403 });
+    }
+
+    await User.findByIdAndUpdate(userId, { $set: { role } });
+
+    if (role === 'ADMIN') {
+      await Team.findByIdAndUpdate(id, { $addToSet: { admins: userId } });
+    } else {
+      await Team.findByIdAndUpdate(id, { $pull: { admins: userId } });
+    }
+
+    return NextResponse.json({ message: `Role updated to ${role}` });
+  } catch (error) {
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// DELETE /api/teams/[id]/members - remove member
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const user = getUserFromCookie(req);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    await connectToDatabase();
+    const { id } = await params;
+    const { userId } = await req.json();
+
+    const team = await Team.findById(id);
+    if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+
+    const isOwner = team.owner.toString() === user.userId;
+    const isAdmin = team.admins.map((a: any) => a.toString()).includes(user.userId);
+    if (!isOwner && !isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    if (team.owner.toString() === userId) {
+      return NextResponse.json({ error: 'Cannot remove the team owner' }, { status: 400 });
+    }
+
+    await Team.findByIdAndUpdate(id, { $pull: { members: userId, admins: userId } });
+    await User.findByIdAndUpdate(userId, { $pull: { teams: id } });
+
+    return NextResponse.json({ message: 'Member removed' });
+  } catch (error) {
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
