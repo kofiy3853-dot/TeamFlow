@@ -26,7 +26,7 @@ export async function PATCH(req: Request) {
 
     const result = updateProfileSchema.safeParse(body);
     if (!result.success) {
-      return NextResponse.json({ error: result.error.errors[0].message }, { status: 400 });
+      return NextResponse.json({ error: (result.error as any).errors[0].message }, { status: 400 });
     }
 
     const updated = await User.findByIdAndUpdate(
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
 
     const result = changePasswordSchema.safeParse(body);
     if (!result.success) {
-      return NextResponse.json({ error: result.error.errors[0].message }, { status: 400 });
+      return NextResponse.json({ error: (result.error as any).errors[0].message }, { status: 400 });
     }
 
     const { currentPassword, newPassword } = result.data;
