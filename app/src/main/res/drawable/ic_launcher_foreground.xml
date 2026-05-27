@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- TeamFlow Intersecting Collaborative Twin Loops visual -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M38,54 C38,40, 50,28, 64,28 C78,28, 86,40, 86,54 C86,68, 78,80, 64,80 C50,80, 38,68, 38,54 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#A5B4FC"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M70,54 C70,40, 58,28, 44,28 C30,28, 22,40, 22,54 C22,68, 30,80, 44,80 C58,80, 70,68, 70,54 Z" />
+    <!-- Center star sparks -->
+    <path
+        android:fillColor="#FCD34D"
+        android:pathData="M54,44 L56,50 L62,50 L57,54 L59,60 L54,56 L49,60 L51,54 L46,50 L52,50 Z" />
+</vector>

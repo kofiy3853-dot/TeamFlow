@@ -1,0 +1,6 @@
+{
+  "name": "TeamFlow",
+  "description": "TeamFlow: Professional SaaS Teamwork and Collaboration Platform with Subscription Flow",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
