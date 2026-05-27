@@ -66,10 +66,10 @@ export async function POST(req: Request) {
 
       // 5. Emit real-time payment success event to all connected sockets
       try {
-        // Import the global io instance
-        const { io } = require('global');
-        if (io && typeof io.paymentSuccess === 'function') {
-          io.paymentSuccess({
+        // Access the global io instance attached to globalThis
+        const globalAny = globalThis as any;
+        if (globalAny.io && typeof globalAny.io.paymentSuccess === 'function') {
+          globalAny.io.paymentSuccess({
             reference,
             userId: user?._id?.toString(),
             email: user?.email,
