@@ -1,7 +1,7 @@
 // Node.js-only auth utilities (bcrypt, jwt) — never import in client components
 
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 
 let JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -22,13 +22,13 @@ export const comparePasswords = async (password: string, hash: string) => {
   return await bcrypt.compare(password, hash);
 };
 
-export const signToken = (payload: object, expiresIn = '1d') => {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn });
+export const signToken = (payload: object, expiresIn: SignOptions["expiresIn"] = '1d') => {
+  return jwt.sign(payload, JWT_SECRET as string, { expiresIn });
 };
 
 export const verifyToken = (token: string) => {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, JWT_SECRET as string);
   } catch (error) {
     return null;
   }
