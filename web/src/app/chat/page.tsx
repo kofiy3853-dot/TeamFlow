@@ -25,8 +25,6 @@ interface Team {
   members: TeamMember[];
 }
 
-let socket: Socket | null = null;
-
 // Group consecutive messages from same sender within 5 minutes
 function groupMessages(messages: Message[]) {
   const groups: { sender: Message['sender']; messages: Message[]; date: string }[] = [];
@@ -109,12 +107,13 @@ export default function ChatPage() {
       if (newTeam && newTeam._id) {
         setTeams(prev => [...prev, newTeam]);
         switchTeam(newTeam._id);
+        setShowCreate(false);
+        setGroupName('');
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setShowCreate(false);
-      setGroupName('');
+    } catch (err) {
+      console.error('Failed to create group:', err);
+      setError('Failed to create group. Please try again.');
+      setTimeout(() => setError(''), 3000);
     }
   };
   const [teams, setTeams] = useState<Team[]>([]);
@@ -124,6 +123,7 @@ export default function ChatPage() {
   const messagesRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimeout = useRef<NodeJS.Timeout | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   // Fetch teams then immediately load messages — don't wait for socket
   useEffect(() => {
@@ -162,65 +162,83 @@ export default function ChatPage() {
     }
   };
 
-  // Socket connection
+  // Socket connection - connect once when user is available
   useEffect(() => {
-    if (!user) { router.push('/login'); return; }
+    if (!user) { 
+      router.push('/login'); 
+      return; 
+    }
 
     const token = document.cookie.split('token=')[1]?.split(';')[0] || '';
-    socket = io('/', {
+    const newSocket = io('/', {
       path: '/socket.io',
       auth: { token },
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: 10,
-      // Render free tier doesn't support WebSockets — always use polling
       transports: ['polling'],
     });
 
-    socket.on('connect', () => {
-      console.log('[Socket.IO] Connected:', socket?.id);
+    socketRef.current = newSocket;
+
+    newSocket.on('connect', () => {
+      console.log('[Socket.IO] Connected:', newSocket.id);
       setConnected(true);
       setError('');
+      // Rejoin current team on reconnect
       if (selectedTeam) {
-        socket?.emit('join-team', selectedTeam, user.id);
+        newSocket.emit('join-team', selectedTeam, user.id);
       }
     });
 
-    socket.on('connect_error', (err) => {
+    newSocket.on('connect_error', (err) => {
       console.error('[Socket.IO] Connection error:', err.message);
       setConnected(false);
       setError('Connecting...');
     });
 
-    socket.on('disconnect', (reason) => {
+    newSocket.on('disconnect', (reason) => {
       console.log('[Socket.IO] Disconnected:', reason);
       setConnected(false);
       setError('Reconnecting...');
     });
 
-    socket.on('reconnect', () => {
+    newSocket.on('reconnect', () => {
       setConnected(true);
       setError('');
-      if (selectedTeam) socket?.emit('join-team', selectedTeam, user.id);
+      if (selectedTeam) newSocket.emit('join-team', selectedTeam, user.id);
     });
 
-    socket.on('new-message', (msg: Message) => {
-      setMessages(prev => [...prev, msg]);
+    newSocket.on('new-message', (msg: Message) => {
+      // Deduplicate by ID
+      setMessages(prev => {
+        const exists = prev.some(m => m.id === msg.id);
+        if (exists) return prev;
+        return [...prev, msg];
+      });
     });
 
-    socket.on('user-typing', ({ userName }: { userName: string }) => {
+    newSocket.on('user-typing', ({ userName }: { userName: string }) => {
       setTypingUsers(prev => prev.includes(userName) ? prev : [...prev, userName]);
     });
 
-    socket.on('user-stop-typing', ({ userName }: { userName: string }) => {
+    newSocket.on('user-stop-typing', ({ userName }: { userName: string }) => {
       setTypingUsers(prev => prev.filter(u => u !== userName));
     });
 
+    return () => { 
+      newSocket.disconnect(); 
+      socketRef.current = null;
+    };
+  }, [user, router]); // Only reconnect when user changes
 
-
-    return () => { socket?.disconnect(); };
-  }, [user, router, selectedTeam]);
+  // Handle team switching
+  useEffect(() => {
+    if (selectedTeam && socketRef.current?.connected && user) {
+      socketRef.current.emit('join-team', selectedTeam, user.id);
+    }
+  }, [selectedTeam, user]);
 
 
   // Switch team
@@ -229,8 +247,6 @@ export default function ChatPage() {
     setSelectedTeam(tid);
     setMessages([]);
     setTypingUsers([]);
-    setTeamId(tid);
-    socket?.emit('join-team', tid, user?.id);
     fetchMessages(tid);
   };
 
@@ -251,9 +267,7 @@ export default function ChatPage() {
   const scrollToBottom = () => bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
 
   const handleSend = async () => {
-    if (!input.trim() || !user) return;
-    const tid = selectedTeam || teamId;
-    if (!tid) return;
+    if (!input.trim() || !user || !selectedTeam) return;
 
     const optimisticMsg: Message = {
       id: `temp-${Date.now()}`,
@@ -270,29 +284,46 @@ export default function ChatPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ teamId: tid, content }),
+        body: JSON.stringify({ teamId: selectedTeam, content }),
       });
       if (!res.ok) throw new Error('Failed to send');
       const data = await res.json();
       // Replace optimistic with real
       setMessages(prev => prev.map(m => m.id === optimisticMsg.id ? data.message : m));
-      socket?.emit('send-message', { teamId: tid, content, sender: { id: user.id, fullname: user.fullname } });
-      socket?.emit('stop-typing', { teamId: tid, userId: user.id, userName: user.fullname });
-    } catch {
+      socketRef.current?.emit('send-message', { 
+        teamId: selectedTeam, 
+        content, 
+        sender: { id: user.id, fullname: user.fullname } 
+      });
+      socketRef.current?.emit('stop-typing', { 
+        teamId: selectedTeam, 
+        userId: user.id, 
+        userName: user.fullname 
+      });
+    } catch (err) {
+      console.error('Failed to send message:', err);
       setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
       setInput(content);
-      setError('Failed to send message');
+      setError('Failed to send message. Please try again.');
+      setTimeout(() => setError(''), 3000);
     }
   };
 
   const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
-    const tid = selectedTeam || teamId;
-    if (socket && user && tid) {
-      socket.emit('typing', { teamId: tid, userId: user.id, userName: user.fullname });
+    if (socketRef.current && user && selectedTeam) {
+      socketRef.current.emit('typing', { 
+        teamId: selectedTeam, 
+        userId: user.id, 
+        userName: user.fullname 
+      });
       if (typingTimeout.current) clearTimeout(typingTimeout.current);
       typingTimeout.current = setTimeout(() => {
-        socket?.emit('stop-typing', { teamId: tid, userId: user.id, userName: user.fullname });
+        socketRef.current?.emit('stop-typing', { 
+          teamId: selectedTeam, 
+          userId: user.id, 
+          userName: user.fullname 
+        });
       }, 2000);
     }
   };
@@ -309,8 +340,19 @@ export default function ChatPage() {
       <div className="w-64 shrink-0 bg-surface border-r border-border flex-col hidden lg:flex">
         {/* Sidebar header */}
         <div className="px-4 py-4 border-b border-border">
-          <h3 className="font-outfit font-bold text-base">Team Chat</h3>
-          <div className="flex items-center gap-1.5 mt-1">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="font-outfit font-bold text-base">Team Chat</h3>
+            <button 
+              onClick={() => setShowCreate(true)} 
+              className="p-1.5 rounded-lg hover:bg-surface-hover transition-colors"
+              title="Create new group"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5">
             {connected
               ? <><Wifi className="w-3 h-3 text-emerald-500" /><span className="text-xs text-emerald-500">Connected</span></>
               : <><WifiOff className="w-3 h-3 text-foreground/40" /><span className="text-xs text-foreground/40">{error || 'Offline'}</span></>
@@ -494,31 +536,7 @@ export default function ChatPage() {
                             }`}
                           >
                             {msg.content}
-</div>
-          {/* Create Group button */}
-          <button onClick={() => setShowCreate(true)} className="ml-2 p-1 rounded-full hover:bg-surface-hover transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
-          {/* Create Group modal */}
-          {showCreate && (
-            <div className="fixed inset-0 flex items-center justify-center bg-black/30">
-              <div className="bg-surface p-6 rounded-lg shadow-xl w-80">
-                <h3 className="text-lg font-semibold mb-4">Create Group</h3>
-                <input
-                  className="w-full mb-4 p-2 border rounded"
-                  placeholder="Group name"
-                  value={groupName}
-                  onChange={e => setGroupName(e.target.value)}
-                />
-                <div className="flex justify-end gap-2">
-                  <button className="px-3 py-1 rounded bg-surface-hover" onClick={() => setShowCreate(false)}>Cancel</button>
-                  <button className="px-3 py-1 rounded bg-primary text-white" onClick={handleCreateGroup}>Create</button>
-                </div>
-              </div>
-            </div>
-          )}
+                          </div>
                         ))}
                       </div>
                     </motion.div>
@@ -579,6 +597,67 @@ export default function ChatPage() {
           </p>
         </div>
       </div>
+
+      {/* Create Group Modal */}
+      {showCreate && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center bg-black/50 z-50 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowCreate(false);
+              setGroupName('');
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setShowCreate(false);
+              setGroupName('');
+            }
+          }}
+        >
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-surface p-6 rounded-2xl shadow-2xl w-96 border border-border"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold font-outfit mb-4">Create New Group</h3>
+            <input
+              autoFocus
+              className="w-full mb-4 px-4 py-2.5 border border-border rounded-xl bg-background outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+              placeholder="Enter group name"
+              value={groupName}
+              onChange={e => setGroupName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreateGroup();
+                if (e.key === 'Escape') {
+                  setShowCreate(false);
+                  setGroupName('');
+                }
+              }}
+            />
+            <div className="flex justify-end gap-2">
+              <button 
+                className="px-4 py-2 rounded-xl bg-surface-hover hover:bg-surface text-foreground transition-colors"
+                onClick={() => {
+                  setShowCreate(false);
+                  setGroupName('');
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                className="px-4 py-2 rounded-xl bg-primary text-white hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleCreateGroup}
+                disabled={!groupName.trim()}
+              >
+                Create
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
