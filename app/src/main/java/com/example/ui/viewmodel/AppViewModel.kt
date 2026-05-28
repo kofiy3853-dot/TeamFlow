@@ -116,7 +116,9 @@ class AppViewModel(private val repository: AppRepository) : ViewModel() {
                 _loginState.value = UiState.Success(it)
                 // Connect to Socket.IO with the stored JWT
                 viewModelScope.launch {
-                    repository.getToken()?.let { token -> SocketService.connect(token) }
+                    repository.getToken()?.let { token -> 
+                        SocketService.connect(token, it.email, it.fullname)
+                    }
                 }
                 // Auto-select first joined team
                 val tIds = it.joinedTeams.split(",").filter { id -> id.isNotBlank() }
@@ -267,7 +269,7 @@ class AppViewModel(private val repository: AppRepository) : ViewModel() {
             // Save to local Room DB immediately for instant UI feedback
             repository.sendMessage(teamId, user.email, user.fullname, content)
             // Also emit over Socket.IO for real-time delivery to other clients
-            SocketService.sendMessage(teamId, content)
+            SocketService.sendMessage(teamId, content, user.email, user.fullname, user.email)
         }
     }
 

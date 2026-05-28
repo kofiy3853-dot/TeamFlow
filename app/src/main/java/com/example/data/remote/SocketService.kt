@@ -64,6 +64,7 @@ object SocketService {
                 .setAuth(mapOf("token" to token))
                 .setReconnection(true)
                 .setReconnectionAttempts(5)
+                .setTransports(arrayOf("polling"))  // Match server config (Render free tier)
                 .build()
 
             socket = IO.socket(SERVER_URL, opts)
