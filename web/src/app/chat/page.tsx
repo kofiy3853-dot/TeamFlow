@@ -237,8 +237,8 @@ export default function ChatPage() {
 
   // Socket connection - connect once when user is available
   useEffect(() => {
-    if (!user) { 
-      router.push('/login'); 
+    // Only connect if user is authenticated and page is not loading
+    if (!user || pageLoading) { 
       return; 
     }
 
@@ -314,7 +314,7 @@ export default function ChatPage() {
       newSocket.disconnect(); 
       socketRef.current = null;
     };
-  }, [user, router]); // Only reconnect when user changes
+  }, [user, router, pageLoading]); // Add pageLoading to dependencies
 
   // Handle team switching
   useEffect(() => {
