@@ -382,7 +382,15 @@ export default function ChatPage() {
       const data = await res.json();
       
       // Replace optimistic with real message from API
-      setMessages(prev => prev.map(m => m.id === optimisticMsg.id ? data.message : m));
+      const realMessage = {
+        ...data.message,
+        id: data.message.id || data.message._id?.toString(),
+        sender: {
+          ...data.message.sender,
+          id: data.message.sender?.id || data.message.sender?._id?.toString(),
+        }
+      };
+      setMessages(prev => prev.map(m => m.id === optimisticMsg.id ? realMessage : m));
       
       // Emit to socket for real-time delivery to OTHER users
       // (we already have the message from the API response)
