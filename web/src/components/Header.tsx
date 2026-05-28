@@ -46,9 +46,6 @@ export function Header() {
     .toUpperCase()
     .slice(0, 2) || 'U';
 
-  useEffect(() => {
-    if (user) fetchNotifications();
-  }, [user]);
 
   // Close on outside click
   useEffect(() => {
@@ -71,6 +68,12 @@ export function Header() {
       }
     } catch (e) { console.error(e); }
   };
+
+  useEffect(() => {
+    if (!user) return;
+    const timer = setTimeout(() => fetchNotifications(), 0);
+    return () => clearTimeout(timer);
+  }, [user]);
 
   const markAllRead = async () => {
     try {
@@ -135,7 +138,7 @@ export function Header() {
                         <CheckCheck className="w-3 h-3" /> Mark all read
                       </button>
                     )}
-                    <button onClick={() => setShowNotifs(false)} className="p-1 rounded-lg hover:bg-surface-hover">
+                    <button onClick={() => setShowNotifs(false)} aria-label="Close notifications" title="Close notifications" className="p-1 rounded-lg hover:bg-surface-hover">
                       <X className="w-4 h-4 text-foreground/50" />
                     </button>
                   </div>
@@ -187,7 +190,7 @@ export function Header() {
 
         {/* User avatar */}
         <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-purple-500 flex items-center justify-center text-white text-xs font-bold shadow-md">
+          <div className="w-8 h-8 rounded-full bg-linear-to-tr from-primary to-purple-500 flex items-center justify-center text-white text-xs font-bold shadow-md">
             {initials}
           </div>
           <div className="hidden sm:block">

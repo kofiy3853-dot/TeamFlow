@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Users, Link, MoreHorizontal, Copy, Check, X, Loader2, Crown, Shield, UserMinus, ChevronDown } from 'lucide-react';
+import { Plus, Users, Link, MoreHorizontal, Copy, Check, X, Loader2, Crown, Shield, UserMinus } from 'lucide-react';
 import { useRBAC } from '@/hooks/useRBAC';
 
 interface Member {
@@ -24,7 +24,7 @@ interface Team {
 
 const avatarColors = ['from-blue-500 to-indigo-600', 'from-purple-500 to-pink-600', 'from-emerald-500 to-teal-600'];
 
-const roleIcon: Record<string, any> = {
+const roleIcon = {
   OWNER: Crown,
   ADMIN: Shield,
   MEMBER: Users,
@@ -46,8 +46,6 @@ export default function TeamsPage() {
   const [joinError, setJoinError] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  useEffect(() => { fetchTeams(); }, []);
-
   const fetchTeams = async () => {
     try {
       setIsLoading(true);
@@ -56,8 +54,8 @@ export default function TeamsPage() {
       if (!res.ok) throw new Error('Failed to fetch teams');
       const data = await res.json();
       setTeams(data.teams || []);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
     }
@@ -84,8 +82,8 @@ export default function TeamsPage() {
       if (!res.ok) throw new Error('Failed to create team');
       setTeamName(''); setTeamDesc(''); setShowCreate(false);
       await fetchTeams();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setCreating(false);
     }
@@ -106,8 +104,8 @@ export default function TeamsPage() {
       if (!res.ok) throw new Error(data.error);
       setInviteCode(''); setShowJoin(false);
       await fetchTeams();
-    } catch (err: any) {
-      setJoinError(err.message);
+    } catch (err: unknown) {
+      setJoinError(err instanceof Error ? err.message : String(err));
     } finally {
       setJoining(false);
     }
@@ -123,8 +121,8 @@ export default function TeamsPage() {
       });
       if (!res.ok) throw new Error('Failed to update role');
       await fetchTeamMembers(teamId);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -139,10 +137,15 @@ export default function TeamsPage() {
       if (!res.ok) throw new Error('Failed to remove member');
       await fetchTeamMembers(teamId);
       await fetchTeams();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
     }
   };
+
+  useEffect(() => { 
+    const timer = setTimeout(() => fetchTeams(), 0);
+    return () => clearTimeout(timer);
+  }, []);
 
   const copyInvite = (team: Team) => {
     navigator.clipboard.writeText(team.inviteCode);
@@ -168,7 +171,7 @@ export default function TeamsPage() {
       {error && (
         <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm flex items-center justify-between">
           {error}
-          <button onClick={() => setError('')}><X className="w-4 h-4" /></button>
+          <button onClick={() => setError('')} aria-label="Dismiss error" title="Dismiss error"><X className="w-4 h-4" /></button>
         </div>
       )}
 
@@ -183,7 +186,7 @@ export default function TeamsPage() {
               transition={{ delay: i * 0.1 }}
               className="glass-panel rounded-2xl border border-border p-6 hover:border-primary/30 hover:shadow-lg transition-all duration-300 group">
               <div className="flex items-start justify-between mb-4">
-                <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${avatarColors[i % 3]} flex items-center justify-center text-white font-bold font-outfit text-lg shadow-md`}>
+                <div className={`w-14 h-14 rounded-xl bg-linear-to-br ${avatarColors[i % 3]} flex items-center justify-center text-white font-bold font-outfit text-lg shadow-md`}>
                   {team.name.substring(0, 3).toUpperCase()}
                 </div>
                 <button
@@ -245,18 +248,18 @@ export default function TeamsPage() {
               onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-bold font-outfit">Create a New Team</h3>
-                <button onClick={() => setShowCreate(false)} className="p-1 rounded-lg hover:bg-surface-hover"><X className="w-5 h-5" /></button>
+                <button onClick={() => setShowCreate(false)} aria-label="Close modal" title="Close modal" className="p-1 rounded-lg hover:bg-surface-hover"><X className="w-5 h-5" /></button>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-foreground/80 block mb-1.5">Team Name</label>
-                  <input type="text" value={teamName} onChange={(e) => setTeamName(e.target.value)}
+                  <label htmlFor="teamName" className="text-sm font-medium text-foreground/80 block mb-1.5">Team Name</label>
+                  <input id="teamName" type="text" value={teamName} onChange={(e) => setTeamName(e.target.value)}
                     className="w-full px-4 py-3 bg-surface border border-border rounded-xl focus:ring-2 focus:ring-primary/50 outline-none transition-all"
                     placeholder="e.g. Product Team" autoFocus />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-foreground/80 block mb-1.5">Description</label>
-                  <textarea value={teamDesc} onChange={(e) => setTeamDesc(e.target.value)} rows={3}
+                  <label htmlFor="teamDesc" className="text-sm font-medium text-foreground/80 block mb-1.5">Description</label>
+                  <textarea id="teamDesc" value={teamDesc} onChange={(e) => setTeamDesc(e.target.value)} rows={3}
                     className="w-full px-4 py-3 bg-surface border border-border rounded-xl focus:ring-2 focus:ring-primary/50 outline-none transition-all resize-none"
                     placeholder="What does this team work on?" />
                 </div>
@@ -285,12 +288,12 @@ export default function TeamsPage() {
               onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-bold font-outfit">Join a Team</h3>
-                <button onClick={() => setShowJoin(false)} className="p-1 rounded-lg hover:bg-surface-hover"><X className="w-5 h-5" /></button>
+                <button onClick={() => setShowJoin(false)} aria-label="Close modal" title="Close modal" className="p-1 rounded-lg hover:bg-surface-hover"><X className="w-5 h-5" /></button>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-foreground/80 block mb-1.5">Invite Code</label>
-                  <input type="text" value={inviteCode} onChange={(e) => setInviteCode(e.target.value)}
+                  <label htmlFor="inviteCode" className="text-sm font-medium text-foreground/80 block mb-1.5">Invite Code</label>
+                  <input id="inviteCode" type="text" value={inviteCode} onChange={(e) => setInviteCode(e.target.value)}
                     className="w-full px-4 py-3 bg-surface border border-border rounded-xl focus:ring-2 focus:ring-primary/50 outline-none transition-all font-mono"
                     placeholder="Paste invite code here" autoFocus />
                 </div>
@@ -323,7 +326,7 @@ export default function TeamsPage() {
                   <h3 className="text-xl font-bold font-outfit">{showMembers.name}</h3>
                   <p className="text-sm text-foreground/50">{showMembers.members.length} members</p>
                 </div>
-                <button onClick={() => setShowMembers(null)} className="p-1 rounded-lg hover:bg-surface-hover"><X className="w-5 h-5" /></button>
+                <button onClick={() => setShowMembers(null)} aria-label="Close modal" title="Close modal" className="p-1 rounded-lg hover:bg-surface-hover"><X className="w-5 h-5" /></button>
               </div>
 
               <div className="overflow-y-auto space-y-2 flex-1">
@@ -337,7 +340,7 @@ export default function TeamsPage() {
                   return (
                     <div key={member._id} className="flex items-center justify-between p-3 rounded-xl bg-surface border border-border">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+                        <div className="w-9 h-9 rounded-full bg-linear-to-br from-primary to-purple-500 flex items-center justify-center text-white text-xs font-bold">
                           {member.fullname.substring(0, 2).toUpperCase()}
                         </div>
                         <div>
@@ -359,6 +362,8 @@ export default function TeamsPage() {
                             <select
                               value={currentRole}
                               onChange={(e) => handleRoleChange(showMembers._id, member._id, e.target.value)}
+                              aria-label="Change member role"
+                              title="Change member role"
                               className="text-xs bg-surface border border-border rounded-lg px-2 py-1 outline-none"
                             >
                               <option value="MEMBER">MEMBER</option>

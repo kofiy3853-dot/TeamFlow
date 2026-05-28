@@ -1,9 +1,4 @@
-// Custom Next.js server with Socket.IO support
-// This replaces `next dev` / `next start` so that Socket.IO can share
-// the same HTTP server as Next.js.
-
 const { createServer } = require('http');
-const { parse } = require('url');
 const next = require('next');
 const { Server: SocketIOServer } = require('socket.io');
 
@@ -15,7 +10,14 @@ const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
-    const parsedUrl = parse(req.url, true);
+    const baseUrl = `http://${req.headers.host || 'localhost'}`;
+    const urlObj = new URL(req.url, baseUrl);
+    const parsedUrl = {
+      pathname: urlObj.pathname,
+      query: Object.fromEntries(urlObj.searchParams),
+      path: req.url,
+      href: urlObj.href,
+    };
     handle(req, res, parsedUrl);
   });
 
@@ -23,7 +25,20 @@ app.prepare().then(() => {
   const io = new SocketIOServer(httpServer, {
     path: '/socket.io',
     cors: {
-      origin: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+      // Accept localhost (web dev), Android emulator (10.0.2.2), and any ngrok tunnel
+      origin: (origin, callback) => {
+        const allowed = [
+          'http://localhost:3000',
+          'http://10.0.2.2:3000',
+          process.env.NEXT_PUBLIC_APP_URL,
+        ].filter(Boolean);
+        // Also allow ngrok tunnels (https://*.ngrok-free.app, https://*.ngrok.io)
+        if (!origin || allowed.includes(origin) || /https:\/\/.+\.ngrok(-free)?\.app/.test(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error(`CORS: origin ${origin} not allowed`));
+        }
+      },
       methods: ['GET', 'POST'],
       credentials: true,
     },
@@ -91,8 +106,8 @@ app.prepare().then(() => {
       socket.to(`team:${teamId}`).emit('user-typing', { userId, userName });
     });
 
-    socket.on('stop-typing', ({ teamId, userId }) => {
-      socket.to(`team:${teamId}`).emit('user-stop-typing', { userId });
+    socket.on('stop-typing', ({ teamId, userId, userName }) => {
+      socket.to(`team:${teamId}`).emit('user-stop-typing', { userId, userName });
     });
 
     // Disconnect

@@ -29,9 +29,11 @@ export async function POST(req: Request) {
     // Amount for subscription (e.g., $10 or 100 GHS)
     const SUBSCRIPTION_AMOUNT = 100;
     const reference = crypto.randomBytes(16).toString('hex');
-    const callbackUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000') + `/api/payment/verify?reference=${reference}`;
-
-    // Initialize with Paystack
+    // IMPORTANT: For Paystack to reach this callback, APP_URL must be a publicly
+    // accessible URL. In development use ngrok: `ngrok http 3000`
+    // Then set NEXT_PUBLIC_APP_URL=https://your-tunnel.ngrok-free.app in .env.local
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+    const callbackUrl = `${appUrl}/api/payment/verify?reference=${reference}`;
     const paystackData = await initializePayment(user.email, SUBSCRIPTION_AMOUNT, reference, callbackUrl);
 
     // Save payment record as PENDING

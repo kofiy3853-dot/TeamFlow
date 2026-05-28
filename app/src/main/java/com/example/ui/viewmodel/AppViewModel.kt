@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.*
+import com.example.data.remote.SocketService
 import com.example.data.repository.AppRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -113,11 +114,17 @@ class AppViewModel(private val repository: AppRepository) : ViewModel() {
             val res = repository.login(email, passwordHash)
             res.onSuccess {
                 _loginState.value = UiState.Success(it)
-                // Automatically set first team as selected team if available
+                // Connect to Socket.IO with the stored JWT
+                viewModelScope.launch {
+                    repository.getToken()?.let { token -> SocketService.connect(token) }
+                }
+                // Auto-select first joined team
                 val tIds = it.joinedTeams.split(",").filter { id -> id.isNotBlank() }
                 if (tIds.isNotEmpty() && _selectedTeamId.value == null) {
                     _selectedTeamId.value = tIds.first()
                 }
+                // Kick off a remote teams sync
+                viewModelScope.launch { repository.syncTeamsFromRemote() }
             }.onFailure {
                 _loginState.value = UiState.Error(it.message ?: "Authentication failed")
             }
@@ -137,6 +144,7 @@ class AppViewModel(private val repository: AppRepository) : ViewModel() {
     }
 
     fun logout() {
+        SocketService.disconnect()
         repository.logout()
         _loginState.value = UiState.Idle
         _registerState.value = UiState.Idle
@@ -150,7 +158,10 @@ class AppViewModel(private val repository: AppRepository) : ViewModel() {
     }
 
     fun selectTeam(teamId: String) {
+        val previous = _selectedTeamId.value
+        if (previous != null) SocketService.leaveRoom(previous)
         _selectedTeamId.value = teamId
+        SocketService.joinRoom(teamId)
     }
 
     // Payment Actions
@@ -253,8 +264,16 @@ class AppViewModel(private val repository: AppRepository) : ViewModel() {
         val user = currentUser.value ?: return
         if (content.isBlank()) return
         viewModelScope.launch {
+            // Save to local Room DB immediately for instant UI feedback
             repository.sendMessage(teamId, user.email, user.fullname, content)
+            // Also emit over Socket.IO for real-time delivery to other clients
+            SocketService.sendMessage(teamId, content)
         }
+    }
+
+    fun emitTyping() {
+        val teamId = _selectedTeamId.value ?: return
+        SocketService.emitTyping(teamId)
     }
 
     // Task Actions

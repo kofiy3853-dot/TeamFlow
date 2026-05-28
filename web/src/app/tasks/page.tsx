@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, MoreHorizontal, X, Loader2, Trash2, Search, Filter } from 'lucide-react';
+import { Plus, MoreHorizontal, X, Loader2, Trash2, Search } from 'lucide-react';
 import { useRBAC } from '@/hooks/useRBAC';
 
 type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
@@ -48,6 +48,8 @@ function TaskCard({ task, canManage, onDelete, onStatusChange }: {
         </span>
         <div className="relative">
           <button onClick={() => setShowMenu(!showMenu)}
+            aria-label="Task options"
+            title="Task options"
             className="p-0.5 rounded-md hover:bg-surface-hover transition-colors">
             <MoreHorizontal className="w-4 h-4 text-foreground/40" />
           </button>
@@ -77,7 +79,7 @@ function TaskCard({ task, canManage, onDelete, onStatusChange }: {
       {task.description && <p className="text-xs text-foreground/50 mb-3 line-clamp-2">{task.description}</p>}
       <div className="flex items-center justify-between mt-3">
         <div className="flex items-center gap-1.5">
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center text-white text-[10px] font-bold" title={task.assignee}>
+          <div className="w-6 h-6 rounded-full bg-linear-to-br from-primary to-purple-500 flex items-center justify-center text-white text-[10px] font-bold" title={task.assignee}>
             {task.assignee?.substring(0, 2).toUpperCase() || 'U'}
           </div>
           <span className="text-xs text-foreground/50 truncate max-w-[80px]">{task.assignee || 'Unassigned'}</span>
@@ -88,6 +90,11 @@ function TaskCard({ task, canManage, onDelete, onStatusChange }: {
   );
 }
 
+interface Team {
+  _id: string;
+  name: string;
+}
+
 export default function TasksPage() {
   const { canCreateTasks } = useRBAC();
   const [allTasks, setAllTasks] = useState<Task[]>([]);
@@ -95,7 +102,7 @@ export default function TasksPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const [teams, setTeams] = useState<any[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [teamMembers, setTeamMembers] = useState<Member[]>([]);
 
   // Filters
@@ -113,20 +120,6 @@ export default function TasksPage() {
   const [newAssignees, setNewAssignees] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
-
-  useEffect(() => { fetchTasks(); fetchTeams(); }, []);
-
-  // Re-group when filters change
-  useEffect(() => { applyFilters(allTasks); }, [search, filterPriority, filterStatus, allTasks]);
-
-  // Fetch team members when team changes
-  useEffect(() => {
-    if (!newTeamId) return;
-    fetch(`/api/teams/${newTeamId}/members`, { credentials: 'include' })
-      .then(r => r.json())
-      .then(d => setTeamMembers(d.team?.members || []))
-      .catch(console.error);
-  }, [newTeamId]);
 
   const fetchTeams = async () => {
     try {
@@ -147,6 +140,7 @@ export default function TasksPage() {
       if (!res.ok) throw new Error('Failed to fetch tasks');
       const tasks = await res.json();
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mapped: Task[] = tasks.map((t: any) => ({
         id: t._id?.toString(),
         title: t.title,
@@ -160,8 +154,8 @@ export default function TasksPage() {
       }));
 
       setAllTasks(mapped);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch tasks');
       setColumns(emptyColumns);
     } finally {
       setIsLoading(false);
@@ -185,6 +179,26 @@ export default function TasksPage() {
     ]);
   };
 
+  useEffect(() => { 
+    const timer = setTimeout(() => { fetchTasks(); fetchTeams(); }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Re-group when filters change
+  useEffect(() => { 
+    const timer = setTimeout(() => applyFilters(allTasks), 0);
+    return () => clearTimeout(timer);
+  }, [search, filterPriority, filterStatus, allTasks, applyFilters]);
+
+  // Fetch team members when team changes
+  useEffect(() => {
+    if (!newTeamId) return;
+    fetch(`/api/teams/${newTeamId}/members`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => setTeamMembers(d.team?.members || []))
+      .catch(console.error);
+  }, [newTeamId]);
+
   const handleCreateTask = async () => {
     if (!newTitle.trim() || !newTeamId) return;
     setCreating(true);
@@ -206,8 +220,8 @@ export default function TasksPage() {
       setShowCreate(false);
       setNewTitle(''); setNewDesc(''); setNewDueDate(''); setNewAssignees([]);
       await fetchTasks();
-    } catch (err: any) {
-      setCreateError(err.message);
+    } catch (err: unknown) {
+      setCreateError(err instanceof Error ? err.message : String(err));
     } finally {
       setCreating(false);
     }
@@ -230,8 +244,8 @@ export default function TasksPage() {
       });
       if (!res.ok) throw new Error('Failed to update task');
       await fetchTasks();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -271,11 +285,13 @@ export default function TasksPage() {
           />
         </div>
         <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}
+          aria-label="Filter by priority" title="Filter by priority"
           className="px-4 py-2.5 bg-surface border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50">
           <option value="">All Priorities</option>
           {['LOW', 'MEDIUM', 'HIGH', 'URGENT'].map(p => <option key={p} value={p}>{p}</option>)}
         </select>
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+          aria-label="Filter by status" title="Filter by status"
           className="px-4 py-2.5 bg-surface border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/50">
           <option value="">All Statuses</option>
           {['TODO', 'IN_PROGRESS', 'REVIEW', 'DONE'].map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
@@ -290,7 +306,7 @@ export default function TasksPage() {
 
       {error && (
         <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm flex items-center justify-between">
-          {error} <button onClick={() => setError('')}><X className="w-4 h-4" /></button>
+          {error} <button onClick={() => setError('')} aria-label="Dismiss error" title="Dismiss error"><X className="w-4 h-4" /></button>
         </div>
       )}
 
@@ -335,34 +351,34 @@ export default function TasksPage() {
               onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-bold font-outfit">Create Task</h3>
-                <button onClick={() => setShowCreate(false)} className="p-1 rounded-lg hover:bg-surface-hover">
+                <button onClick={() => setShowCreate(false)} aria-label="Close modal" title="Close modal" className="p-1 rounded-lg hover:bg-surface-hover">
                   <X className="w-5 h-5" />
                 </button>
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-foreground/80 block mb-1.5">Title *</label>
-                  <input type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
+                  <label htmlFor="newTitle" className="text-sm font-medium text-foreground/80 block mb-1.5">Title *</label>
+                  <input id="newTitle" type="text" value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
                     placeholder="Task title" autoFocus
                     className="w-full px-4 py-3 bg-surface border border-border rounded-xl focus:ring-2 focus:ring-primary/50 outline-none text-sm" />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-foreground/80 block mb-1.5">Description</label>
-                  <textarea value={newDesc} onChange={(e) => setNewDesc(e.target.value)} rows={2}
+                  <label htmlFor="newDesc" className="text-sm font-medium text-foreground/80 block mb-1.5">Description</label>
+                  <textarea id="newDesc" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} rows={2}
                     placeholder="Optional description"
                     className="w-full px-4 py-3 bg-surface border border-border rounded-xl focus:ring-2 focus:ring-primary/50 outline-none text-sm resize-none" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-sm font-medium text-foreground/80 block mb-1.5">Priority</label>
-                    <select value={newPriority} onChange={(e) => setNewPriority(e.target.value as Priority)}
+                    <label htmlFor="newPriority" className="text-sm font-medium text-foreground/80 block mb-1.5">Priority</label>
+                    <select id="newPriority" value={newPriority} onChange={(e) => setNewPriority(e.target.value as Priority)}
                       className="w-full px-4 py-3 bg-surface border border-border rounded-xl outline-none text-sm">
                       {['LOW', 'MEDIUM', 'HIGH', 'URGENT'].map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-foreground/80 block mb-1.5">Status</label>
-                    <select value={newStatus} onChange={(e) => setNewStatus(e.target.value as Status)}
+                    <label htmlFor="newStatus" className="text-sm font-medium text-foreground/80 block mb-1.5">Status</label>
+                    <select id="newStatus" value={newStatus} onChange={(e) => setNewStatus(e.target.value as Status)}
                       className="w-full px-4 py-3 bg-surface border border-border rounded-xl outline-none text-sm">
                       {['TODO', 'IN_PROGRESS', 'REVIEW', 'DONE'].map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
                     </select>
@@ -370,16 +386,16 @@ export default function TasksPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-sm font-medium text-foreground/80 block mb-1.5">Team *</label>
-                    <select value={newTeamId} onChange={(e) => setNewTeamId(e.target.value)}
+                    <label htmlFor="newTeamId" className="text-sm font-medium text-foreground/80 block mb-1.5">Team *</label>
+                    <select id="newTeamId" value={newTeamId} onChange={(e) => setNewTeamId(e.target.value)}
                       className="w-full px-4 py-3 bg-surface border border-border rounded-xl outline-none text-sm">
                       {teams.length === 0 && <option value="">No teams</option>}
                       {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-foreground/80 block mb-1.5">Due Date</label>
-                    <input type="date" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)}
+                    <label htmlFor="newDueDate" className="text-sm font-medium text-foreground/80 block mb-1.5">Due Date</label>
+                    <input id="newDueDate" type="date" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)}
                       className="w-full px-4 py-3 bg-surface border border-border rounded-xl outline-none text-sm" />
                   </div>
                 </div>
@@ -394,7 +410,7 @@ export default function TasksPage() {
                           <input type="checkbox" checked={newAssignees.includes(m._id)}
                             onChange={() => toggleAssignee(m._id)}
                             className="w-4 h-4 accent-primary" />
-                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+                          <div className="w-7 h-7 rounded-full bg-linear-to-br from-primary to-purple-500 flex items-center justify-center text-white text-xs font-bold">
                             {m.fullname.substring(0, 2).toUpperCase()}
                           </div>
                           <div>

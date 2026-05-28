@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { io, Socket } from 'socket.io-client';
 import { useStore } from '@/store/useStore';
@@ -14,10 +14,15 @@ interface Message {
   createdAt: string;
 }
 
+interface TeamMember {
+  _id: string;
+  fullname: string;
+}
+
 interface Team {
   _id: string;
   name: string;
-  members: any[];
+  members: TeamMember[];
 }
 
 let socket: Socket | null = null;
@@ -67,7 +72,7 @@ function Avatar({ name, size = 'md', online }: { name: string; size?: 'sm' | 'md
   const color = colors[name?.charCodeAt(0) % colors.length] || colors[0];
   return (
     <div className="relative shrink-0">
-      <div className={`${sizes[size]} rounded-full bg-gradient-to-br ${color} flex items-center justify-center text-white font-bold`}>
+      <div className={`${sizes[size]} rounded-full bg-linear-to-br ${color} flex items-center justify-center text-white font-bold`}>
         {initials}
       </div>
       {online !== undefined && (
@@ -89,7 +94,6 @@ export default function ChatPage() {
   const [teamId, setTeamId] = useState('');
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState('');
-  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -108,13 +112,31 @@ export default function ChatPage() {
       .catch(console.error);
   }, []);
 
+  const fetchMessages = async (tid: string) => {
+    try {
+      setIsLoading(true);
+      const res = await fetch(`/api/chat/messages?teamId=${tid}&limit=100`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load messages');
+      const data = await res.json();
+      const sorted = [...(data.messages || [])].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+      setMessages(sorted);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Socket connection
   useEffect(() => {
     if (!user) { router.push('/login'); return; }
 
+    const token = document.cookie.split('token=')[1]?.split(';')[0] || '';
     socket = io('/', {
       path: '/socket.io',
-      auth: { token: '' },
+      auth: { token },
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
@@ -154,37 +176,15 @@ export default function ChatPage() {
       setTypingUsers(prev => prev.includes(userName) ? prev : [...prev, userName]);
     });
 
-    socket.on('user-stop-typing', ({ userId }: { userId: string }) => {
-      setTypingUsers(prev => prev.filter(u => u !== userId));
+    socket.on('user-stop-typing', ({ userName }: { userName: string }) => {
+      setTypingUsers(prev => prev.filter(u => u !== userName));
     });
 
-    socket.on('user-online', ({ userId }: { userId: string }) => {
-      setOnlineUsers(prev => new Set([...prev, userId]));
-    });
 
-    socket.on('user-offline', ({ userId }: { userId: string }) => {
-      setOnlineUsers(prev => { const s = new Set(prev); s.delete(userId); return s; });
-    });
 
     return () => { socket?.disconnect(); };
   }, [user, router, selectedTeam]);
 
-  const fetchMessages = async (tid: string) => {
-    try {
-      setIsLoading(true);
-      const res = await fetch(`/api/chat/messages?teamId=${tid}&limit=100`, { credentials: 'include' });
-      if (!res.ok) throw new Error('Failed to load messages');
-      const data = await res.json();
-      const sorted = [...(data.messages || [])].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      );
-      setMessages(sorted);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // Switch team
   const switchTeam = (tid: string) => {
@@ -240,7 +240,7 @@ export default function ChatPage() {
       // Replace optimistic with real
       setMessages(prev => prev.map(m => m.id === optimisticMsg.id ? data.message : m));
       socket?.emit('send-message', { teamId: tid, content, sender: { id: user.id, fullname: user.fullname } });
-      socket?.emit('stop-typing', { teamId: tid, userId: user.id });
+      socket?.emit('stop-typing', { teamId: tid, userId: user.id, userName: user.fullname });
     } catch {
       setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
       setInput(content);
@@ -255,7 +255,7 @@ export default function ChatPage() {
       socket.emit('typing', { teamId: tid, userId: user.id, userName: user.fullname });
       if (typingTimeout.current) clearTimeout(typingTimeout.current);
       typingTimeout.current = setTimeout(() => {
-        socket?.emit('stop-typing', { teamId: tid, userId: user.id });
+        socket?.emit('stop-typing', { teamId: tid, userId: user.id, userName: user.fullname });
       }, 2000);
     }
   };
@@ -267,7 +267,7 @@ export default function ChatPage() {
     <div className="flex h-[calc(100vh-4rem)] gap-0 rounded-2xl overflow-hidden border border-border">
 
       {/* ── Sidebar ─────────────────────────────────────────────────── */}
-      <div className="w-64 shrink-0 bg-surface border-r border-border flex flex-col hidden lg:flex">
+      <div className="w-64 shrink-0 bg-surface border-r border-border flex-col hidden lg:flex">
         {/* Sidebar header */}
         <div className="px-4 py-4 border-b border-border">
           <h3 className="font-outfit font-bold text-base">Team Chat</h3>
@@ -309,9 +309,9 @@ export default function ChatPage() {
               <span className="text-xs text-foreground/40 font-medium">{currentTeam.members.length} members</span>
             </div>
             <div className="flex -space-x-2">
-              {currentTeam.members.slice(0, 6).map((m: any, i: number) => (
+              {currentTeam.members.slice(0, 6).map((m: TeamMember, i: number) => (
                 <div key={m._id || i} title={m.fullname || 'Member'}
-                  className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-purple-500 border-2 border-surface flex items-center justify-center text-white text-[10px] font-bold">
+                  className="w-7 h-7 rounded-full bg-linear-to-br from-primary to-purple-500 border-2 border-surface flex items-center justify-center text-white text-[10px] font-bold">
                   {(m.fullname || 'U').substring(0, 2).toUpperCase()}
                 </div>
               ))}
@@ -342,7 +342,7 @@ export default function ChatPage() {
                 <p className="text-xs text-primary mt-0.5 flex items-center gap-1">
                   <span className="flex gap-0.5">
                     {[0,1,2].map(i => (
-                      <span key={i} className="w-1 h-1 bg-primary rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                      <span key={i} className={`w-1 h-1 bg-primary rounded-full animate-bounce ${i === 1 ? 'animation-delay-150' : i === 2 ? 'animation-delay-300' : ''}`} />
                     ))}
                   </span>
                   {typingUsers.slice(0, 2).join(', ')} typing...
@@ -354,7 +354,11 @@ export default function ChatPage() {
           </div>
           {/* Mobile team switcher */}
           <div className="lg:hidden">
-            <select value={selectedTeam} onChange={(e) => switchTeam(e.target.value)}
+            <select 
+              value={selectedTeam} 
+              onChange={(e) => switchTeam(e.target.value)}
+              aria-label="Select a team"
+              title="Select a team"
               className="text-sm bg-surface border border-border rounded-lg px-3 py-1.5 outline-none">
               {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
             </select>
@@ -426,7 +430,7 @@ export default function ChatPage() {
                         {/* Messages */}
                         {group.messages.map((msg, mi) => (
                           <div key={msg.id}
-                            className={`px-4 py-2.5 text-sm leading-relaxed break-words ${
+                          className={`px-4 py-2.5 text-sm leading-relaxed wrap-break-word ${
                               isOwn
                                 ? `bg-primary text-white ${mi === 0 ? 'rounded-2xl rounded-tr-sm' : 'rounded-2xl'}`
                                 : `bg-surface border border-border text-foreground ${mi === 0 ? 'rounded-2xl rounded-tl-sm' : 'rounded-2xl'}`

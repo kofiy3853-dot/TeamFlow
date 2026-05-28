@@ -25,13 +25,26 @@ class MainActivity : ComponentActivity() {
         val database = AppDatabase.getDatabase(this)
         
         // 2. Setup DAOs and single Repository
+        val tokenManager = com.example.data.prefs.TokenManager(applicationContext)
+        val okHttpClient = com.example.data.remote.NetworkModule.provideOkHttpClient(tokenManager)
+        val retrofit = com.example.data.remote.NetworkModule.provideRetrofit(okHttpClient)
+        val authService = com.example.data.remote.NetworkModule.createService<com.example.data.remote.api.AuthService>(retrofit)
+        val teamsService = com.example.data.remote.NetworkModule.createService<com.example.data.remote.api.TeamsService>(retrofit)
+        val tasksService = com.example.data.remote.NetworkModule.createService<com.example.data.remote.api.TasksService>(retrofit)
+        val paymentsService = com.example.data.remote.NetworkModule.createService<com.example.data.remote.api.PaymentsService>(retrofit)
+
         val repository = AppRepository(
             userDao = database.userDao(),
             teamDao = database.teamDao(),
             messageDao = database.messageDao(),
             taskDao = database.taskDao(),
             paymentDao = database.paymentDao(),
-            notificationDao = database.notificationDao()
+            notificationDao = database.notificationDao(),
+            authService = authService,
+            tokenManager = tokenManager,
+            teamsService = teamsService,
+            tasksService = tasksService,
+            paymentsService = paymentsService
         )
 
         // Prepopulate database with Super Admin default user for easier initial testing

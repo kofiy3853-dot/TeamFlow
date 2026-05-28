@@ -2,6 +2,9 @@ package com.example.data.repository
 
 import com.example.data.dao.*
 import com.example.data.model.*
+import com.example.data.remote.api.TeamsService
+import com.example.data.remote.api.TasksService
+import com.example.data.remote.api.PaymentsService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -9,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -18,7 +22,12 @@ class AppRepository(
     private val messageDao: MessageDao,
     private val taskDao: TaskDao,
     private val paymentDao: PaymentDao,
-    private val notificationDao: NotificationDao
+    private val notificationDao: NotificationDao,
+    private val authService: com.example.data.remote.api.AuthService? = null,
+    private val tokenManager: com.example.data.prefs.TokenManager? = null,
+    private val teamsService: TeamsService? = null,
+    private val tasksService: TasksService? = null,
+    private val paymentsService: PaymentsService? = null
 ) {
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
@@ -27,6 +36,28 @@ class AppRepository(
 
     // Auth
     suspend fun login(email: String, passwordHash: String): Result<User> {
+        if (authService != null && tokenManager != null) {
+            try {
+                val response = authService.login(com.example.data.remote.api.LoginRequest(email, passwordHash))
+                if (response.isSuccessful && response.body() != null) {
+                    val authData = response.body()!!
+                    tokenManager.saveToken(authData.token)
+                    
+                    val user = User(
+                        email = authData.user.email,
+                        fullname = authData.user.fullname,
+                        phone = "0000000000",
+                        passwordHash = passwordHash
+                    )
+                    userDao.insertUser(user)
+                    _currentUser.value = user
+                    return Result.success(user)
+                }
+            } catch (e: Exception) {
+                // fallback to local for now
+            }
+        }
+        
         val user = userDao.getUserByEmailOneShot(email)
         return if (user != null && user.passwordHash == passwordHash) {
             _currentUser.value = user
@@ -41,6 +72,19 @@ class AppRepository(
         if (existing != null) {
             return Result.failure(Exception("User already exists with this email"))
         }
+        
+        if (authService != null && tokenManager != null) {
+            try {
+                val response = authService.register(com.example.data.remote.api.RegisterRequest(fullname, email, passwordHash, phone))
+                if (response.isSuccessful && response.body() != null) {
+                    val authData = response.body()!!
+                    tokenManager.saveToken(authData.token)
+                }
+            } catch (e: Exception) {
+                // ignore and register locally
+            }
+        }
+
         val defaultRole = if (isSuperAdmin) "SUPER_ADMIN" else "OWNER"
         val newUser = User(
             email = email,
@@ -57,7 +101,77 @@ class AppRepository(
     }
 
     fun logout() {
+        repositoryScope.launch { tokenManager?.clearToken() }
         _currentUser.value = null
+    }
+
+    /** Expose the stored JWT so the ViewModel can connect Socket.IO */
+    suspend fun getToken(): String? = tokenManager?.tokenFlow?.first()
+
+    /** Pull teams from the remote backend and upsert into local Room DB */
+    suspend fun syncTeamsFromRemote() {
+        teamsService ?: return
+        try {
+            val response = teamsService.getMyTeams()
+            if (response.isSuccessful) {
+                response.body()?.teams?.forEach { dto ->
+                    val local = teamDao.getTeamByIdOneShot(dto._id)
+                    val team = Team(
+                        id          = dto._id,
+                        name        = dto.name,
+                        description = dto.description ?: "",
+                        ownerEmail  = local?.ownerEmail ?: "",
+                        inviteCode  = dto.inviteCode,
+                        members     = dto.members.joinToString(","),
+                        admins      = dto.admins.joinToString(",")
+                    )
+                    teamDao.insertTeam(team)
+                }
+            }
+        } catch (e: Exception) { /* network unavailable – use local cache */ }
+    }
+
+    /** Pull tasks from the remote backend and upsert into local Room DB */
+    suspend fun syncTasksFromRemote() {
+        tasksService ?: return
+        try {
+            val response = tasksService.getMyTasks()
+            if (response.isSuccessful) {
+                response.body()?.forEach { dto ->
+                    val task = Task(
+                        id              = dto._id,
+                        teamId          = dto.team?._id ?: "",
+                        title           = dto.title,
+                        description     = dto.description ?: "",
+                        assignedToEmail = dto.assignedTo.firstOrNull()?.email ?: "",
+                        assignedToName  = dto.assignedTo.firstOrNull()?.fullname ?: "",
+                        priority        = dto.priority,
+                        status          = dto.status,
+                        dueDate         = if (dto.dueDate != null) {
+                            try { java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).parse(dto.dueDate)?.time ?: 0L } catch (e: Exception) { 0L }
+                        } else 0L
+                    )
+                    taskDao.insertTask(task)
+                }
+            }
+        } catch (e: Exception) { /* use local cache */ }
+    }
+
+    /** Initialize a Paystack payment and return the hosted checkout URL */
+    suspend fun initRemotePayment(plan: String, network: String, phone: String): Result<String> {
+        paymentsService ?: return Result.failure(Exception("Payments service not configured"))
+        return try {
+            val response = paymentsService.initializePayment(
+                com.example.data.remote.api.InitPaymentRequest(plan, network, phone)
+            )
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!.authorization_url)
+            } else {
+                Result.failure(Exception("Payment initialization failed: ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     // Refresh current user from DB

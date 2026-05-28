@@ -21,10 +21,14 @@ function NotificationToggles() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(NOTIF_PREFS_KEY);
-      if (stored) setPrefs(JSON.parse(stored));
-    } catch {}
+    // Defer reading localStorage to avoid synchronous cascading renders
+    const timer = setTimeout(() => {
+      try {
+        const stored = localStorage.getItem(NOTIF_PREFS_KEY);
+        if (stored) setPrefs(JSON.parse(stored));
+      } catch {}
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const toggle = (key: string) => {
@@ -89,10 +93,14 @@ export default function SettingsPage() {
   const [passwordError, setPasswordError] = useState('');
 
   useEffect(() => {
-    if (user) {
-      setFullName(user.fullname || '');
-      setEmail(user.email || '');
-    }
+    // Defer state updates when user object loads to avoid synchronous cascading renders
+    const timer = setTimeout(() => {
+      if (user) {
+        setFullName(user.fullname || '');
+        setEmail(user.email || '');
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [user]);
 
   const handleSaveProfile = async () => {
@@ -109,8 +117,8 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error(data.error);
       setUser({ ...user!, fullname: data.user.fullname });
       setProfileMsg('Profile updated successfully');
-    } catch (err: any) {
-      setProfileMsg(err.message || 'Failed to update profile');
+    } catch (err: unknown) {
+      setProfileMsg(err instanceof Error ? err.message : 'Failed to update profile');
     } finally {
       setProfileSaving(false);
       setTimeout(() => setProfileMsg(''), 3000);
@@ -138,8 +146,8 @@ export default function SettingsPage() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch (err: any) {
-      setPasswordError(err.message || 'Failed to change password');
+    } catch (err: unknown) {
+      setPasswordError(err instanceof Error ? err.message : 'Failed to change password');
     } finally {
       setPasswordSaving(false);
       setTimeout(() => setPasswordMsg(''), 3000);
@@ -184,24 +192,24 @@ export default function SettingsPage() {
               <div className="space-y-6">
                 <h3 className="font-bold text-xl font-outfit">Profile Information</h3>
                 <div className="flex items-center gap-5">
-                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center text-white text-2xl font-bold font-outfit shadow-lg">
+                  <div className="w-20 h-20 rounded-2xl bg-linear-to-br from-primary to-purple-500 flex items-center justify-center text-white text-2xl font-bold font-outfit shadow-lg">
                     {user?.fullname?.substring(0, 2).toUpperCase() || 'U'}
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-foreground/80 block mb-1.5">Full Name</label>
-                    <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}
+                    <label htmlFor="fullName" className="text-sm font-medium text-foreground/80 block mb-1.5">Full Name</label>
+                    <input id="fullName" type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}
                       className="w-full px-4 py-3 bg-surface border border-border rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all text-sm" />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-foreground/80 block mb-1.5">Email</label>
-                    <input type="email" value={email} disabled
+                    <label htmlFor="email" className="text-sm font-medium text-foreground/80 block mb-1.5">Email</label>
+                    <input id="email" type="email" value={email} disabled
                       className="w-full px-4 py-3 bg-surface/50 border border-border rounded-xl outline-none text-sm text-foreground/50 cursor-not-allowed" />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="text-sm font-medium text-foreground/80 block mb-1.5">Phone Number</label>
-                    <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                    <label htmlFor="phone" className="text-sm font-medium text-foreground/80 block mb-1.5">Phone Number</label>
+                    <input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
                       className="w-full px-4 py-3 bg-surface border border-border rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all text-sm" />
                   </div>
                 </div>

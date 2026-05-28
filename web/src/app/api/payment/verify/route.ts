@@ -2,7 +2,13 @@ import { NextResponse } from 'next/server';
 import connectToDatabase from '@/lib/mongodb';
 import { Payment } from '@/models/Payment';
 import { User } from '@/models/User';
-import { verifyToken, signToken } from '@/lib/auth-node';
+import { signToken } from '@/lib/auth-node';
+
+// Build an absolute redirect URL that works whether running locally or in production
+function absoluteUrl(path: string): string {
+  const base = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+  return `${base}${path}`;
+}
 
 export async function GET(req: Request) {
   try {
@@ -10,7 +16,7 @@ export async function GET(req: Request) {
     const reference = searchParams.get('reference');
 
     if (!reference) {
-      return NextResponse.redirect(new URL('/payment?error=MissingReference', req.url));
+      return NextResponse.redirect(absoluteUrl('/payment?error=MissingReference'));
     }
 
     // Call Paystack API to verify transaction
@@ -23,28 +29,28 @@ export async function GET(req: Request) {
     const data = await paystackRes.json();
 
     if (!data.status || data.data.status !== 'success') {
-      return NextResponse.redirect(new URL('/payment?error=PaymentFailed', req.url));
+      return NextResponse.redirect(absoluteUrl('/payment?error=PaymentFailed'));
     }
 
     await connectToDatabase();
 
-    // Find the payment by reference first (since the cookie might be dropped by the browser on redirect)
+    // Find the payment by reference
     const payment = await Payment.findOne({ reference });
     if (!payment) {
-      return NextResponse.redirect(new URL('/payment?error=PaymentNotFound', req.url));
+      return NextResponse.redirect(absoluteUrl('/payment?error=PaymentNotFound'));
     }
 
-    // Check if it's already successful (e.g. from a webhook)
+    // If already processed (e.g. webhook arrived first), just log the user in
     if (payment.status === 'SUCCESS') {
       const user = await User.findById(payment.user);
       if (user) {
         const newToken = signToken({ userId: user._id, role: user.role, status: user.subscriptionStatus });
-        const response = NextResponse.redirect(new URL('/dashboard', req.url));
+        const response = NextResponse.redirect(absoluteUrl('/dashboard'));
         response.cookies.set('token', newToken, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
-          maxAge: 60 * 60 * 24
+          maxAge: 60 * 60 * 24,
         });
         return response;
       }
@@ -62,30 +68,30 @@ export async function GET(req: Request) {
     if (user) {
       user.subscriptionStatus = 'ACTIVE';
       const expiry = new Date();
-      expiry.setDate(expiry.getDate() + 30); // 30 days from now
+      expiry.setDate(expiry.getDate() + 30);
       user.subscriptionExpiry = expiry;
       await user.save();
 
-      // Regenerate JWT to log the user in automatically with new status
+      // Issue a fresh JWT so the user is logged in automatically with ACTIVE status
       const newToken = signToken({ userId: user._id, role: user.role, status: 'ACTIVE' });
 
-      // Redirect to dashboard with the new cookie
-      const response = NextResponse.redirect(new URL('/dashboard', req.url));
+      const response = NextResponse.redirect(absoluteUrl('/dashboard'));
       response.cookies.set('token', newToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 60 * 60 * 24 // 1 day
+        maxAge: 60 * 60 * 24, // 1 day
       });
 
       return response;
     }
 
-    // Fallback if no user is found but payment succeeded
-    return NextResponse.redirect(new URL('/login?redirectUrl=/dashboard&message=PaymentSuccessfulPleaseLogin', req.url));
-
+    // Fallback: payment succeeded but no user found — ask them to log in
+    return NextResponse.redirect(
+      absoluteUrl('/login?redirectUrl=/dashboard&message=PaymentSuccessfulPleaseLogin')
+    );
   } catch (error) {
     console.error('Verify Payment Error:', error);
-    return NextResponse.redirect(new URL('/payment?error=VerificationError', req.url));
+    return NextResponse.redirect(absoluteUrl('/payment?error=VerificationError'));
   }
 }
