@@ -41,7 +41,7 @@ app.prepare().then(() => {
       methods: ['GET', 'POST'],
       credentials: true,
     },
-    transports: ['websocket', 'polling'],
+    transports: ['polling'],  // WebSocket not supported on Render free tier
   });
 
   // ── JWT Auth middleware ───────────────────────────────────────────────────
