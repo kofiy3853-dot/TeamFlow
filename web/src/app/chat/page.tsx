@@ -154,6 +154,7 @@ export default function ChatPage() {
     });
 
     socket.on('connect', () => {
+      console.log('[Socket.IO] Connected:', socket?.id);
       setConnected(true);
       setError('');
       if (selectedTeam) {
@@ -161,12 +162,14 @@ export default function ChatPage() {
       }
     });
 
-    socket.on('connect_error', () => {
+    socket.on('connect_error', (err) => {
+      console.error('[Socket.IO] Connection error:', err.message);
       setConnected(false);
       setError('Connecting...');
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
+      console.log('[Socket.IO] Disconnected:', reason);
       setConnected(false);
       setError('Reconnecting...');
     });

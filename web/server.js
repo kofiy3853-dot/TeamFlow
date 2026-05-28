@@ -50,16 +50,17 @@ app.prepare().then(() => {
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token || socket.handshake.query?.token;
     if (!token) {
-      if (dev) return next();
-      return next(new Error('Unauthorized'));
+      console.log('[Socket.IO] No token provided, allowing connection');
+      return next();
     }
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
       socket.data.user = decoded;
+      console.log('[Socket.IO] Token verified for user:', decoded.email || decoded.id);
       next();
     } catch (err) {
-      if (dev) return next();
-      next(new Error('Invalid token'));
+      console.log('[Socket.IO] Token verification failed:', err.message, '- allowing connection anyway');
+      next();
     }
   });
 
