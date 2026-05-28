@@ -211,10 +211,20 @@ export default function ChatPage() {
     });
 
     newSocket.on('new-message', (msg: Message) => {
-      // Deduplicate by ID
+      // Deduplicate: skip if message already exists OR if it's from current user (already added optimistically)
       setMessages(prev => {
         const exists = prev.some(m => m.id === msg.id);
         if (exists) return prev;
+        
+        // Check if this is our own message that was already added optimistically
+        // by checking if there's a recent message with same content from same sender
+        const isOwnRecent = prev.some(m => 
+          m.sender.id === msg.sender.id && 
+          m.content === msg.content &&
+          Math.abs(new Date(m.createdAt).getTime() - new Date(msg.createdAt).getTime()) < 5000
+        );
+        if (isOwnRecent && msg.sender.id === user.id) return prev;
+        
         return [...prev, msg];
       });
     });
@@ -288,13 +298,18 @@ export default function ChatPage() {
       });
       if (!res.ok) throw new Error('Failed to send');
       const data = await res.json();
-      // Replace optimistic with real
+      
+      // Replace optimistic with real message from API
       setMessages(prev => prev.map(m => m.id === optimisticMsg.id ? data.message : m));
+      
+      // Emit to socket for real-time delivery to OTHER users
+      // (we already have the message from the API response)
       socketRef.current?.emit('send-message', { 
         teamId: selectedTeam, 
         content, 
-        sender: { id: user.id, fullname: user.fullname } 
+        sender: { id: user.id, fullname: user.fullname, email: user.email } 
       });
+      
       socketRef.current?.emit('stop-typing', { 
         teamId: selectedTeam, 
         userId: user.id, 
