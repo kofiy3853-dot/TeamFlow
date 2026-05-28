@@ -6,7 +6,7 @@ import { Task } from '@/models/Task';
 import { getUserFromCookie, authorizeRoles } from '@/lib/rbac-node';
 
 export async function GET(req: Request) {
-  const authError = authorizeRoles('OWNER', 'ADMIN')(req);
+  const authError = authorizeRoles('ADMIN')(req);
   if (authError) return authError;
 
   try {

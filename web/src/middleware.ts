@@ -48,7 +48,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/workspace', request.url));
       }
 
-      // Admins/Owners trying to access member-only routes → redirect to dashboard
+      // Admins trying to access member-only routes → redirect to dashboard
       if (isMemberOnlyRoute && role !== 'MEMBER') {
         return NextResponse.redirect(new URL('/dashboard', request.url));
       }

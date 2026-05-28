@@ -9,7 +9,7 @@ export interface IUser extends Document {
   subscriptionStatus: 'ACTIVE' | 'PENDING' | 'EXPIRED' | 'CANCELLED';
   subscriptionPlan: string;
   subscriptionExpiry?: Date;
-  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'SUPER_ADMIN';
+  role: 'ADMIN' | 'MEMBER' | 'SUPER_ADMIN';
   teams: mongoose.Types.ObjectId[];
   notifications: mongoose.Types.ObjectId[];
   createdAt: Date;
@@ -32,7 +32,7 @@ const UserSchema: Schema<IUser> = new Schema(
     subscriptionExpiry: { type: Date },
     role: {
       type: String,
-      enum: ['OWNER', 'ADMIN', 'MEMBER', 'SUPER_ADMIN'],
+      enum: ['ADMIN', 'MEMBER', 'SUPER_ADMIN'],
       default: 'MEMBER',
     },
     teams: [{ type: Schema.Types.ObjectId, ref: 'Team' }],

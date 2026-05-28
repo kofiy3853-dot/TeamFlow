@@ -16,11 +16,21 @@ interface DashboardStats {
   activities: any[];
 }
 
+interface User {
+  _id: string;
+  fullname: string;
+  email: string;
+  role: string;
+  subscriptionStatus: string;
+  createdAt: string;
+}
+
 export default function Dashboard() {
   const user = useStore((state) => state.user);
   const router = useRouter();
   const { canAccessDashboard } = useRBAC();
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -38,17 +48,28 @@ export default function Dashboard() {
         setIsLoading(true);
         setError('');
         
-        const res = await fetch('/api/dashboard/stats', {
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-        });
+        const [statsRes, usersRes] = await Promise.all([
+          fetch('/api/dashboard/stats', {
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+          }),
+          fetch('/api/admin/users', {
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+          })
+        ]);
         
-        if (!res.ok) {
+        if (!statsRes.ok) {
           throw new Error('Failed to fetch dashboard data');
         }
         
-        const data = await res.json();
-        setStats(data);
+        const statsData = await statsRes.json();
+        setStats(statsData);
+
+        if (usersRes.ok) {
+          const usersData = await usersRes.json();
+          setUsers(usersData.users || []);
+        }
       } catch (err: any) {
         console.error('Error fetching dashboard:', err);
         setError(err.message || 'Failed to load dashboard');
@@ -150,7 +171,12 @@ export default function Dashboard() {
         >
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-bold font-outfit">Recent Tasks</h3>
-            <button className="text-sm text-primary font-medium hover:underline">View All</button>
+            <button 
+              onClick={() => router.push('/tasks')}
+              className="text-sm text-primary font-medium hover:underline"
+            >
+              View All
+            </button>
           </div>
           
           <div className="space-y-4">
@@ -175,34 +201,52 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* Team Activity */}
+        {/* All Users */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}
           className="glass-panel rounded-2xl p-6"
         >
-          <h3 className="text-xl font-bold font-outfit mb-6">Activity</h3>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold font-outfit">All Users</h3>
+            <span className="text-sm text-foreground/60">{users.length} total</span>
+          </div>
           
-          <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
-            {stats?.activities && stats.activities.length > 0 ? (
-              stats.activities.map((activity: any, i: number) => (
-                <div key={activity._id || i} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-full border border-surface bg-primary/20 text-primary shadow shrink-0 z-10">
-                    <MessageSquare className="w-4 h-4" />
-                  </div>
-                  <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl bg-surface border border-border shadow-sm">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-sm text-primary">{activity.user || 'User'}</span>
-                      <span className="text-xs text-foreground/50">{activity.time || 'Recently'}</span>
+          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            {users.length > 0 ? (
+              users.map((u) => (
+                <div key={u._id} className="p-3 rounded-xl bg-surface border border-border hover:border-primary/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
+                      {u.fullname.substring(0, 2).toUpperCase()}
                     </div>
-                    <p className="text-sm text-foreground/70">{activity.action || 'Activity'}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{u.fullname}</p>
+                      <p className="text-xs text-foreground/50 truncate">{u.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      u.role === 'ADMIN' ? 'bg-primary/10 text-primary' : 
+                      u.role === 'SUPER_ADMIN' ? 'bg-purple-500/10 text-purple-500' :
+                      'bg-surface-hover text-foreground/60'
+                    }`}>
+                      {u.role}
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      u.subscriptionStatus === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-500' :
+                      u.subscriptionStatus === 'EXPIRED' ? 'bg-red-500/10 text-red-500' :
+                      'bg-yellow-500/10 text-yellow-500'
+                    }`}>
+                      {u.subscriptionStatus}
+                    </span>
                   </div>
                 </div>
               ))
             ) : (
               <div className="text-center py-8 text-foreground/60">
-                <p>No recent activity</p>
+                <p>No users found</p>
               </div>
             )}
           </div>

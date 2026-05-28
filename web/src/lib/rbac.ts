@@ -1,6 +1,6 @@
 // CLIENT-SAFE: Only types and permission matrix — no server imports
 
-export type UserRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'SUPER_ADMIN';
+export type UserRole = 'ADMIN' | 'MEMBER' | 'SUPER_ADMIN';
 
 export interface AuthenticatedUser {
   userId: string;
@@ -12,18 +12,18 @@ export interface AuthenticatedUser {
  * Permission matrix for features
  */
 export const PERMISSIONS = {
-  DASHBOARD: ['OWNER', 'ADMIN'],
-  TEAM_ANALYTICS: ['OWNER', 'ADMIN'],
-  MANAGE_MEMBERS: ['OWNER', 'ADMIN'],
-  CREATE_TASKS: ['OWNER', 'ADMIN'],
-  ASSIGN_TASKS: ['OWNER', 'ADMIN'],
-  VIEW_ASSIGNED_TASKS: ['OWNER', 'ADMIN', 'MEMBER'],
-  CHAT_ACCESS: ['OWNER', 'ADMIN', 'MEMBER'],
-  PAYMENT_HISTORY: ['OWNER', 'ADMIN'],
-  PERSONAL_PAYMENT_HISTORY: ['OWNER', 'ADMIN', 'MEMBER'],
-  TEAM_SETTINGS: ['OWNER'],
-  SUBSCRIPTION_CONTROLS: ['OWNER'],
-  VIEW_ALL_PAYMENTS: ['OWNER', 'ADMIN'],
+  DASHBOARD: ['ADMIN'],
+  TEAM_ANALYTICS: ['ADMIN'],
+  MANAGE_MEMBERS: ['ADMIN'],
+  CREATE_TASKS: ['ADMIN'],
+  ASSIGN_TASKS: ['ADMIN'],
+  VIEW_ASSIGNED_TASKS: ['ADMIN', 'MEMBER'],
+  CHAT_ACCESS: ['ADMIN', 'MEMBER'],
+  PAYMENT_HISTORY: ['ADMIN'],
+  PERSONAL_PAYMENT_HISTORY: ['ADMIN', 'MEMBER'],
+  TEAM_SETTINGS: ['ADMIN'],
+  SUBSCRIPTION_CONTROLS: ['ADMIN'],
+  VIEW_ALL_PAYMENTS: ['ADMIN'],
 } as const;
 
 /**

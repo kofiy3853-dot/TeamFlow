@@ -13,8 +13,7 @@ export function useRBAC() {
     return canAccess(userRole, feature);
   };
 
-  const isOwner = (): boolean => userRole === 'OWNER';
-  const isAdmin = (): boolean => userRole === 'ADMIN' || userRole === 'OWNER';
+  const isAdmin = (): boolean => userRole === 'ADMIN';
   const isMember = (): boolean => userRole === 'MEMBER';
 
   const canAccessDashboard = (): boolean => can('DASHBOARD');
@@ -32,7 +31,6 @@ export function useRBAC() {
     user,
     userRole,
     can,
-    isOwner,
     isAdmin,
     isMember,
     canAccessDashboard,

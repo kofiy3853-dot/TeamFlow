@@ -25,7 +25,6 @@ interface Team {
 const avatarColors = ['from-blue-500 to-indigo-600', 'from-purple-500 to-pink-600', 'from-emerald-500 to-teal-600'];
 
 const roleIcon = {
-  OWNER: Crown,
   ADMIN: Shield,
   MEMBER: Users,
 };
@@ -332,10 +331,10 @@ export default function TeamsPage() {
               <div className="overflow-y-auto space-y-2 flex-1">
                 {showMembers.members.map((member) => {
                   const isOwner = showMembers.owner._id === member._id;
-                  const isAdmin = showMembers.admins.some((a) => a._id === member._id);
-                  const currentRole = isOwner ? 'OWNER' : isAdmin ? 'ADMIN' : 'MEMBER';
+                  const isAdmin = showMembers.admins.some((a) => a._id === member._id) || isOwner;
+                  const currentRole = isAdmin ? 'ADMIN' : 'MEMBER';
                   const RoleIcon = roleIcon[currentRole] || Users;
-                  const canManage = user?.role === 'OWNER' && !isOwner;
+                  const canManage = user?.role === 'ADMIN' && !isOwner;
 
                   return (
                     <div key={member._id} className="flex items-center justify-between p-3 rounded-xl bg-surface border border-border">
@@ -350,7 +349,6 @@ export default function TeamsPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium ${
-                          currentRole === 'OWNER' ? 'bg-yellow-500/10 text-yellow-500' :
                           currentRole === 'ADMIN' ? 'bg-primary/10 text-primary' :
                           'bg-surface-hover text-foreground/50'
                         }`}>
