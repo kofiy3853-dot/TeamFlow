@@ -245,6 +245,12 @@ export default function ChatPage() {
     }
   };
 
+  // Keep a ref of selectedTeam for socket connect events
+  const selectedTeamRef = useRef(selectedTeam);
+  useEffect(() => {
+    selectedTeamRef.current = selectedTeam;
+  }, [selectedTeam]);
+
   // Socket connection - connect once when user is available
   useEffect(() => {
     // Only connect if user is authenticated and page is not loading
@@ -269,9 +275,9 @@ export default function ChatPage() {
       console.log('[Socket.IO] Connected:', newSocket.id);
       setConnected(true);
       setError('');
-      // Rejoin current team on reconnect
-      if (selectedTeam && user?.id) {
-        newSocket.emit('join-team', selectedTeam, user.id);
+      // Rejoin current team on connect/reconnect
+      if (selectedTeamRef.current && user?.id) {
+        newSocket.emit('join-team', selectedTeamRef.current, user.id);
       }
     });
 
@@ -290,7 +296,7 @@ export default function ChatPage() {
     newSocket.on('reconnect', () => {
       setConnected(true);
       setError('');
-      if (selectedTeam && user?.id) newSocket.emit('join-team', selectedTeam, user.id);
+      if (selectedTeamRef.current && user?.id) newSocket.emit('join-team', selectedTeamRef.current, user.id);
     });
 
     newSocket.on('new-message', (msg: Message) => {
