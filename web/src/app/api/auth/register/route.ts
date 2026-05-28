@@ -33,9 +33,9 @@ export async function POST(req: Request) {
     // Hash password
     const hashedPassword = await hashPassword(password);
 
-    // First user to register becomes OWNER, everyone else is MEMBER
+    // First user to register becomes ADMIN, everyone else is MEMBER
     const userCount = await User.countDocuments();
-    const role = userCount === 0 ? 'OWNER' : 'MEMBER';
+    const role = userCount === 0 ? 'ADMIN' : 'MEMBER';
 
     // Create user with PENDING subscription status by default
     const newUser = await User.create({

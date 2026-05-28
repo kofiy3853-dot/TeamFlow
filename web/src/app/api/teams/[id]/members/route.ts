@@ -26,6 +26,66 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
 }
 
+// POST /api/teams/[id]/members - Add a member to a team
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const user = getUserFromCookie(req);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    await connectToDatabase();
+    
+    const { id } = await params;
+    const { userId } = await req.json();
+
+    if (!userId) {
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+    }
+
+    const team = await Team.findById(id);
+    if (!team) {
+      return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+    }
+
+    // Check if requester is admin or owner
+    const isAdmin = team.admins.some((adminId: any) => adminId.toString() === user.userId);
+    const isOwner = team.owner.toString() === user.userId;
+    
+    if (!isAdmin && !isOwner) {
+      return NextResponse.json({ error: 'Only admins can add members' }, { status: 403 });
+    }
+
+    // Check if user is already a member
+    const alreadyMember = team.members.some((memberId: any) => memberId.toString() === userId);
+    if (alreadyMember) {
+      return NextResponse.json({ error: 'User is already a member' }, { status: 409 });
+    }
+
+    // Add user to team
+    await Team.findByIdAndUpdate(id, { 
+      $addToSet: { members: userId } 
+    });
+
+    // Add team to user's teams
+    await User.findByIdAndUpdate(userId, { 
+      $addToSet: { teams: id } 
+    });
+
+    // Fetch updated team with populated members
+    const updatedTeam = await Team.findById(id)
+      .populate('owner', 'fullname email')
+      .populate('members', 'fullname email')
+      .populate('admins', 'fullname email');
+
+    return NextResponse.json({ 
+      message: 'Member added successfully',
+      team: updatedTeam 
+    });
+  } catch (error) {
+    console.error('Add member error:', error);
+    return NextResponse.json({ error: 'Failed to add member' }, { status: 500 });
+  }
+}
+
 // PATCH /api/teams/[id]/members - update member role
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
