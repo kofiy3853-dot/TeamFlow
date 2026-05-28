@@ -54,7 +54,6 @@ export async function POST(req: Request) {
   try {
     const user = getUserFromCookie(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (user.role === 'MEMBER') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     await connectToDatabase();
 
