@@ -5,8 +5,9 @@ import { User } from '@/models/User';
 import { signToken } from '@/lib/auth-node';
 
 // Build an absolute redirect URL that works whether running locally or in production
-function absoluteUrl(path: string): string {
-  const base = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+function absoluteUrl(req: Request, path: string): string {
+  const requestUrl = new URL(req.url);
+  const base = (process.env.NEXT_PUBLIC_APP_URL || requestUrl.origin).replace(/\/$/, '');
   return `${base}${path}`;
 }
 
@@ -16,7 +17,7 @@ export async function GET(req: Request) {
     const reference = searchParams.get('reference');
 
     if (!reference) {
-      return NextResponse.redirect(absoluteUrl('/payment?error=MissingReference'));
+      return NextResponse.redirect(absoluteUrl(req, '/payment?error=MissingReference'));
     }
 
     // Call Paystack API to verify transaction
@@ -29,7 +30,7 @@ export async function GET(req: Request) {
     const data = await paystackRes.json();
 
     if (!data.status || data.data.status !== 'success') {
-      return NextResponse.redirect(absoluteUrl('/payment?error=PaymentFailed'));
+      return NextResponse.redirect(absoluteUrl(req, '/payment?error=PaymentFailed'));
     }
 
     await connectToDatabase();
@@ -37,7 +38,7 @@ export async function GET(req: Request) {
     // Find the payment by reference
     const payment = await Payment.findOne({ reference });
     if (!payment) {
-      return NextResponse.redirect(absoluteUrl('/payment?error=PaymentNotFound'));
+      return NextResponse.redirect(absoluteUrl(req, '/payment?error=PaymentNotFound'));
     }
 
     // If already processed (e.g. webhook arrived first), just log the user in
@@ -45,7 +46,7 @@ export async function GET(req: Request) {
       const user = await User.findById(payment.user);
       if (user) {
         const newToken = signToken({ userId: user._id, role: user.role, status: user.subscriptionStatus });
-        const response = NextResponse.redirect(absoluteUrl('/dashboard'));
+        const response = NextResponse.redirect(absoluteUrl(req, '/dashboard'));
         response.cookies.set('token', newToken, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
@@ -75,7 +76,7 @@ export async function GET(req: Request) {
       // Issue a fresh JWT so the user is logged in automatically with ACTIVE status
       const newToken = signToken({ userId: user._id, role: user.role, status: 'ACTIVE' });
 
-      const response = NextResponse.redirect(absoluteUrl('/dashboard'));
+      const response = NextResponse.redirect(absoluteUrl(req, '/dashboard'));
       response.cookies.set('token', newToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -88,10 +89,10 @@ export async function GET(req: Request) {
 
     // Fallback: payment succeeded but no user found — ask them to log in
     return NextResponse.redirect(
-      absoluteUrl('/login?redirectUrl=/dashboard&message=PaymentSuccessfulPleaseLogin')
+      absoluteUrl(req, '/login?redirectUrl=/dashboard&message=PaymentSuccessfulPleaseLogin')
     );
   } catch (error) {
     console.error('Verify Payment Error:', error);
-    return NextResponse.redirect(absoluteUrl('/payment?error=VerificationError'));
+    return NextResponse.redirect(absoluteUrl(req, '/payment?error=VerificationError'));
   }
 }

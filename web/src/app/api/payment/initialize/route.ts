@@ -16,7 +16,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized - Please log in again' }, { status: 401 });
     }
 
-    const decoded = verifyToken(authCookie) as any;
+    const decoded = verifyToken(authCookie) as { userId?: string };
     if (!decoded || !decoded.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -29,10 +29,10 @@ export async function POST(req: Request) {
     // Amount for subscription (e.g., $10 or 100 GHS)
     const SUBSCRIPTION_AMOUNT = 100;
     const reference = crypto.randomBytes(16).toString('hex');
-    // IMPORTANT: For Paystack to reach this callback, APP_URL must be a publicly
-    // accessible URL. In development use ngrok: `ngrok http 3000`
-    // Then set NEXT_PUBLIC_APP_URL=https://your-tunnel.ngrok-free.app in .env.local
-    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+    // IMPORTANT: For Paystack to reach this callback, the URL must be publicly accessible.
+    // We dynamically extract the origin from the request URL if NEXT_PUBLIC_APP_URL isn't set.
+    const requestUrl = new URL(req.url);
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || requestUrl.origin).replace(/\/$/, '');
     const callbackUrl = `${appUrl}/api/payment/verify?reference=${reference}`;
     const paystackData = await initializePayment(user.email, SUBSCRIPTION_AMOUNT, reference, callbackUrl);
 
@@ -50,8 +50,9 @@ export async function POST(req: Request) {
       reference: paystackData.data.reference 
     }, { status: 200 });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Payment initialization error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
