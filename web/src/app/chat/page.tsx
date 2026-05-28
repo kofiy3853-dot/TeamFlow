@@ -100,21 +100,28 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const typingTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch teams
+  // Fetch teams then immediately load messages — don't wait for socket
   useEffect(() => {
     fetch('/api/teams', { credentials: 'include' })
       .then(r => r.json())
       .then(d => {
         const t = d.teams || [];
         setTeams(t);
-        if (t.length > 0) setSelectedTeam(t[0]._id);
+        if (t.length > 0) {
+          setSelectedTeam(t[0]._id);
+          fetchMessages(t[0]._id); // load messages right away
+        } else {
+          setIsLoading(false); // no teams — stop loading
+        }
       })
-      .catch(console.error);
+      .catch(() => setIsLoading(false));
   }, []);
 
   const fetchMessages = async (tid: string) => {
+    if (!tid) { setIsLoading(false); return; }
     try {
       setIsLoading(true);
+      setError('');
       const res = await fetch(`/api/chat/messages?teamId=${tid}&limit=100`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load messages');
       const data = await res.json();
@@ -123,7 +130,8 @@ export default function ChatPage() {
       );
       setMessages(sorted);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      // Don't show error if it's just an auth issue — user will see empty state
+      console.error('fetchMessages error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -150,7 +158,6 @@ export default function ChatPage() {
       setError('');
       if (selectedTeam) {
         socket?.emit('join-team', selectedTeam, user.id);
-        fetchMessages(selectedTeam);
       }
     });
 
