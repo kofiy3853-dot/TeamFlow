@@ -1,6 +1,8 @@
-const { createServer } = require('http');
-const next = require('next');
-const { Server: SocketIOServer } = require('socket.io');
+import { createServer } from 'http';
+import next from 'next';
+import { Server as SocketIOServer } from 'socket.io';
+import jwt from 'jsonwebtoken';
+
 
 const dev = process.env.NODE_ENV !== 'production';
 const port = parseInt(process.env.PORT || '3000', 10);
@@ -46,7 +48,6 @@ app.prepare().then(() => {
   });
 
   // ── JWT Auth middleware ───────────────────────────────────────────────────
-  const jwt = require('jsonwebtoken');
   const JWT_SECRET = process.env.JWT_SECRET || 'teamflow-dev-secret-key-change-in-production';
 
   io.use((socket, next) => {
