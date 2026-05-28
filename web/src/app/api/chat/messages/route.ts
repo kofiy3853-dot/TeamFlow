@@ -28,7 +28,14 @@ export async function GET(req: Request) {
     await connectToDatabase();
     
     // Get messages for the team, sorted by most recent first
-    const messages = await Message.find({ team: teamId })
+    const query: any = {};
+    if (teamId === 'global') {
+      query.team = { $exists: false };
+    } else {
+      query.team = teamId;
+    }
+
+    const messages = await Message.find(query)
       .populate('sender', 'fullname avatar')
       .sort({ createdAt: -1 })
       .skip(offset)
@@ -57,12 +64,16 @@ export async function POST(req: Request) {
     }
 
     // Create message in database
-    const message = await Message.create({
-      team: teamId,
+    const messageData: any = {
       content,
       sender: user.userId,
       createdAt: new Date(),
-    });
+    };
+    if (teamId !== 'global') {
+      messageData.team = teamId;
+    }
+
+    const message = await Message.create(messageData);
 
     // Populate sender info for response
     const populatedMessage = await Message.findById(message._id)

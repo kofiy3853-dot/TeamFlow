@@ -1,3 +1,4 @@
+
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <!-- Allow cleartext HTTP only to the Android emulator's loopback (10.0.2.2) -->

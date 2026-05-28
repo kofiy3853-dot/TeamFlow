@@ -2,7 +2,7 @@ import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface IMessage extends Document {
   sender: mongoose.Types.ObjectId;
-  team: mongoose.Types.ObjectId;
+  team?: mongoose.Types.ObjectId;
   content: string;
   attachments?: string[];
   readBy: mongoose.Types.ObjectId[];
@@ -17,7 +17,7 @@ export interface IMessage extends Document {
 const MessageSchema: Schema<IMessage> = new Schema(
   {
     sender: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    team: { type: Schema.Types.ObjectId, ref: 'Team', required: true },
+    team: { type: Schema.Types.ObjectId, ref: 'Team', required: false },
     content: { type: String, required: true },
     attachments: [{ type: String }],
     readBy: [{ type: Schema.Types.ObjectId, ref: 'User' }],

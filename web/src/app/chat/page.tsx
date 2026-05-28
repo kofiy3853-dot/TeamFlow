@@ -107,14 +107,14 @@ export default function ChatPage() {
       .then(d => {
         const t = d.teams || [];
         setTeams(t);
-        if (t.length > 0) {
-          setSelectedTeam(t[0]._id);
-          fetchMessages(t[0]._id); // load messages right away
-        } else {
-          setIsLoading(false); // no teams — stop loading
-        }
+        setSelectedTeam('global');
+        fetchMessages('global');
       })
-      .catch(() => setIsLoading(false));
+      .catch(() => {
+        setIsLoading(false);
+        setSelectedTeam('global');
+        fetchMessages('global');
+      });
   }, []);
 
   const fetchMessages = async (tid: string) => {
@@ -272,7 +272,9 @@ export default function ChatPage() {
     }
   };
 
-  const currentTeam = teams.find(t => t._id === selectedTeam);
+  const currentTeam = selectedTeam === 'global'
+    ? { _id: 'global', name: 'Global Chat', members: [] } as any
+    : teams.find(t => t._id === selectedTeam);
   const grouped = groupMessages(messages);
 
   return (
@@ -294,6 +296,16 @@ export default function ChatPage() {
         {/* Teams list */}
         <div className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
           <p className="text-xs font-semibold text-foreground/40 uppercase tracking-wider px-2 mb-2">Channels</p>
+
+          <button onClick={() => switchTeam('global')}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all group mb-1 ${
+              selectedTeam === 'global' ? 'bg-primary/10 text-primary font-medium' : 'text-foreground/60 hover:bg-surface-hover hover:text-foreground'
+            }`}>
+            <Hash className={`w-4 h-4 shrink-0 ${selectedTeam === 'global' ? 'text-primary' : 'text-foreground/30 group-hover:text-foreground/60'}`} />
+            <span className="truncate">Global Chat</span>
+            {selectedTeam === 'global' && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
+          </button>
+
           {teams.length === 0 ? (
             <p className="text-xs text-foreground/30 px-3 py-2">No teams yet</p>
           ) : (
@@ -314,7 +326,7 @@ export default function ChatPage() {
         </div>
 
         {/* Online members */}
-        {currentTeam && (
+        {currentTeam && selectedTeam !== 'global' && (
           <div className="border-t border-border px-4 py-3">
             <div className="flex items-center gap-2 mb-2">
               <Users className="w-3.5 h-3.5 text-foreground/40" />
@@ -360,7 +372,7 @@ export default function ChatPage() {
                   {typingUsers.slice(0, 2).join(', ')} typing...
                 </p>
               ) : (
-                <p className="text-xs text-foreground/40 mt-0.5">{currentTeam?.members?.length || 0} members</p>
+                <p className="text-xs text-foreground/40 mt-0.5">{selectedTeam === 'global' ? 'Everyone' : `${currentTeam?.members?.length || 0} members`}</p>
               )}
             </div>
           </div>
@@ -372,6 +384,7 @@ export default function ChatPage() {
               aria-label="Select a team"
               title="Select a team"
               className="text-sm bg-surface border border-border rounded-lg px-3 py-1.5 outline-none">
+              <option value="global">Global Chat</option>
               {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
             </select>
           </div>
