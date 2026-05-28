@@ -91,7 +91,32 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState('');
-  const [teamId, setTeamId] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [groupName, setGroupName] = useState('');
+
+  const handleCreateGroup = async () => {
+    if (!groupName.trim()) return;
+    try {
+      const res = await fetch('/api/teams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name: groupName.trim() }),
+      });
+      if (!res.ok) throw new Error('Failed to create group');
+      const data = await res.json();
+      const newTeam = data.team;
+      if (newTeam && newTeam._id) {
+        setTeams(prev => [...prev, newTeam]);
+        switchTeam(newTeam._id);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setShowCreate(false);
+      setGroupName('');
+    }
+  };
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState('');
   const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -354,14 +379,21 @@ export default function ChatPage() {
 
         {/* Chat header */}
         <div className="h-14 px-5 border-b border-border flex items-center justify-between shrink-0 bg-surface/50">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Hash className="w-4 h-4 text-primary" />
-            </div>
-            <div>
-              <h3 className="font-semibold font-outfit text-sm leading-none">
-                {currentTeam?.name || 'Select a team'}
-              </h3>
+<div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => router.push('/dashboard')} className="p-1 rounded-full hover:bg-surface-hover transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Hash className="w-4 h-4 text-primary" />
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold font-outfit text-sm leading-none">
+                      {currentTeam?.name || 'Select a team'}
+                    </h3>
               {typingUsers.length > 0 ? (
                 <p className="text-xs text-primary mt-0.5 flex items-center gap-1">
                   <span className="flex gap-0.5">
@@ -462,7 +494,31 @@ export default function ChatPage() {
                             }`}
                           >
                             {msg.content}
-                          </div>
+</div>
+          {/* Create Group button */}
+          <button onClick={() => setShowCreate(true)} className="ml-2 p-1 rounded-full hover:bg-surface-hover transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+          {/* Create Group modal */}
+          {showCreate && (
+            <div className="fixed inset-0 flex items-center justify-center bg-black/30">
+              <div className="bg-surface p-6 rounded-lg shadow-xl w-80">
+                <h3 className="text-lg font-semibold mb-4">Create Group</h3>
+                <input
+                  className="w-full mb-4 p-2 border rounded"
+                  placeholder="Group name"
+                  value={groupName}
+                  onChange={e => setGroupName(e.target.value)}
+                />
+                <div className="flex justify-end gap-2">
+                  <button className="px-3 py-1 rounded bg-surface-hover" onClick={() => setShowCreate(false)}>Cancel</button>
+                  <button className="px-3 py-1 rounded bg-primary text-white" onClick={handleCreateGroup}>Create</button>
+                </div>
+              </div>
+            </div>
+          )}
                         ))}
                       </div>
                     </motion.div>
