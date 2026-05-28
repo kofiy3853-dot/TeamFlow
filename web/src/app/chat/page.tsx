@@ -247,7 +247,7 @@ export default function ChatPage() {
       setConnected(true);
       setError('');
       // Rejoin current team on reconnect
-      if (selectedTeam) {
+      if (selectedTeam && user?.id) {
         newSocket.emit('join-team', selectedTeam, user.id);
       }
     });
@@ -267,7 +267,7 @@ export default function ChatPage() {
     newSocket.on('reconnect', () => {
       setConnected(true);
       setError('');
-      if (selectedTeam) newSocket.emit('join-team', selectedTeam, user.id);
+      if (selectedTeam && user?.id) newSocket.emit('join-team', selectedTeam, user.id);
     });
 
     newSocket.on('new-message', (msg: Message) => {
@@ -283,7 +283,7 @@ export default function ChatPage() {
           m.content === msg.content &&
           Math.abs(new Date(m.createdAt).getTime() - new Date(msg.createdAt).getTime()) < 5000
         );
-        if (isOwnRecent && msg.sender.id === user.id) return prev;
+        if (isOwnRecent && user?.id && msg.sender.id === user.id) return prev;
         
         return [...prev, msg];
       });
@@ -305,7 +305,7 @@ export default function ChatPage() {
 
   // Handle team switching
   useEffect(() => {
-    if (selectedTeam && socketRef.current?.connected && user) {
+    if (selectedTeam && socketRef.current?.connected && user?.id) {
       socketRef.current.emit('join-team', selectedTeam, user.id);
     }
   }, [selectedTeam, user]);
@@ -342,7 +342,7 @@ export default function ChatPage() {
     const optimisticMsg: Message = {
       id: `temp-${Date.now()}`,
       content: input.trim(),
-      sender: { id: user.id, fullname: user.fullname },
+      sender: { id: user.id || '', fullname: user.fullname || 'Unknown' },
       createdAt: new Date().toISOString(),
     };
     setMessages(prev => [...prev, optimisticMsg]);
@@ -367,13 +367,13 @@ export default function ChatPage() {
       socketRef.current?.emit('send-message', { 
         teamId: selectedTeam, 
         content, 
-        sender: { id: user.id, fullname: user.fullname, email: user.email } 
+        sender: { id: user.id || '', fullname: user.fullname || 'Unknown', email: user.email || '' } 
       });
       
       socketRef.current?.emit('stop-typing', { 
         teamId: selectedTeam, 
-        userId: user.id, 
-        userName: user.fullname 
+        userId: user.id || '', 
+        userName: user.fullname || 'Unknown'
       });
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -389,15 +389,15 @@ export default function ChatPage() {
     if (socketRef.current && user && selectedTeam) {
       socketRef.current.emit('typing', { 
         teamId: selectedTeam, 
-        userId: user.id, 
-        userName: user.fullname 
+        userId: user.id || '', 
+        userName: user.fullname || 'Unknown'
       });
       if (typingTimeout.current) clearTimeout(typingTimeout.current);
       typingTimeout.current = setTimeout(() => {
         socketRef.current?.emit('stop-typing', { 
           teamId: selectedTeam, 
-          userId: user.id, 
-          userName: user.fullname 
+          userId: user.id || '', 
+          userName: user.fullname || 'Unknown'
         });
       }, 2000);
     }
