@@ -54,6 +54,11 @@ export async function POST(req: Request) {
   try {
     const user = getUserFromCookie(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    
+    // Only ADMIN can create tasks
+    if (user.role === 'MEMBER') {
+      return NextResponse.json({ error: 'Only admins can create tasks' }, { status: 403 });
+    }
 
     await connectToDatabase();
 

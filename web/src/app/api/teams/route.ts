@@ -40,6 +40,11 @@ export async function POST(req: Request) {
     const user = getUserFromCookie(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    // Only ADMIN can create teams/groups
+    if (user.role === 'MEMBER') {
+      return NextResponse.json({ error: 'Only admins can create teams' }, { status: 403 });
+    }
+
     await connectToDatabase();
 
     const body = await req.json();

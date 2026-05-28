@@ -417,15 +417,17 @@ export default function ChatPage() {
         <div className="px-4 py-4 border-b border-border">
           <div className="flex items-center justify-between mb-1">
             <h3 className="font-outfit font-bold text-base">Team Chat</h3>
-            <button 
-              onClick={() => setShowCreate(true)} 
-              className="p-1.5 rounded-lg hover:bg-surface-hover transition-colors"
-              title="Create new group"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            </button>
+            {user?.role === 'ADMIN' && (
+              <button 
+                onClick={() => setShowCreate(true)} 
+                className="p-1.5 rounded-lg hover:bg-surface-hover transition-colors"
+                title="Create new group"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-1.5">
             {connected
