@@ -223,7 +223,16 @@ export default function ChatPage() {
       const res = await fetch(`/api/chat/messages?teamId=${tid}&limit=100`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load messages');
       const data = await res.json();
-      const sorted = [...(data.messages || [])].sort(
+      // Normalize MongoDB _id → id for messages and their populated senders
+      const normalized = (data.messages || []).map((m: any) => ({
+        ...m,
+        id: m.id || m._id?.toString(),
+        sender: {
+          ...m.sender,
+          id: m.sender?.id || m.sender?._id?.toString(),
+        },
+      }));
+      const sorted = [...normalized].sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
       setMessages(sorted);
