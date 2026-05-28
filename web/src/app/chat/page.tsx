@@ -91,6 +91,10 @@ export default function ChatPage() {
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [groupName, setGroupName] = useState('');
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{_id: string; fullname: string; email: string}>>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const handleCreateGroup = async () => {
     if (!groupName.trim()) return;
@@ -113,6 +117,62 @@ export default function ChatPage() {
     } catch (err) {
       console.error('Failed to create group:', err);
       setError('Failed to create group. Please try again.');
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+
+  // Search for users
+  const handleUserSearch = async (query: string) => {
+    setUserSearch(query);
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setSearchLoading(true);
+    try {
+      const res = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`, {
+        credentials: 'include'
+      });
+      if (!res.ok) throw new Error('Search failed');
+      const data = await res.json();
+      setSearchResults(data.users || []);
+    } catch (err) {
+      console.error('User search error:', err);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // Add member to current team
+  const handleAddMember = async (userId: string) => {
+    if (!selectedTeam || selectedTeam === 'global') return;
+    
+    try {
+      const res = await fetch(`/api/teams/${selectedTeam}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ userId }),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to add member');
+      }
+      
+      const data = await res.json();
+      // Update teams list with new member
+      setTeams(prev => prev.map(t => t._id === selectedTeam ? data.team : t));
+      setShowAddMember(false);
+      setUserSearch('');
+      setSearchResults([]);
+      setError('Member added successfully!');
+      setTimeout(() => setError(''), 3000);
+    } catch (err: any) {
+      console.error('Add member error:', err);
+      setError(err.message || 'Failed to add member');
       setTimeout(() => setError(''), 3000);
     }
   };
@@ -436,21 +496,21 @@ export default function ChatPage() {
 
         {/* Chat header */}
         <div className="h-14 px-5 border-b border-border flex items-center justify-between shrink-0 bg-surface/50">
-<div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => router.push('/dashboard')} className="p-1 rounded-full hover:bg-surface-hover transition-colors">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </button>
-                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Hash className="w-4 h-4 text-primary" />
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold font-outfit text-sm leading-none">
-                      {currentTeam?.name || 'Select a team'}
-                    </h3>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <button onClick={() => router.push('/dashboard')} className="p-1 rounded-full hover:bg-surface-hover transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Hash className="w-4 h-4 text-primary" />
+              </div>
+            </div>
+            <div>
+              <h3 className="font-semibold font-outfit text-sm leading-none">
+                {currentTeam?.name || 'Select a team'}
+              </h3>
               {typingUsers.length > 0 ? (
                 <p className="text-xs text-primary mt-0.5 flex items-center gap-1">
                   <span className="flex gap-0.5">
@@ -465,17 +525,31 @@ export default function ChatPage() {
               )}
             </div>
           </div>
-          {/* Mobile team switcher */}
-          <div className="lg:hidden">
-            <select 
-              value={selectedTeam} 
-              onChange={(e) => switchTeam(e.target.value)}
-              aria-label="Select a team"
-              title="Select a team"
-              className="text-sm bg-surface border border-border rounded-lg px-3 py-1.5 outline-none">
-              <option value="global">Global Chat</option>
-              {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
-            </select>
+          
+          <div className="flex items-center gap-2">
+            {/* Add member button - only show for non-global teams */}
+            {selectedTeam && selectedTeam !== 'global' && (
+              <button 
+                onClick={() => setShowAddMember(true)}
+                className="p-2 rounded-lg hover:bg-surface-hover transition-colors"
+                title="Add member"
+              >
+                <Users className="w-4 h-4 text-primary" />
+              </button>
+            )}
+            
+            {/* Mobile team switcher */}
+            <div className="lg:hidden">
+              <select 
+                value={selectedTeam} 
+                onChange={(e) => switchTeam(e.target.value)}
+                aria-label="Select a team"
+                title="Select a team"
+                className="text-sm bg-surface border border-border rounded-lg px-3 py-1.5 outline-none">
+                <option value="global">Global Chat</option>
+                {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -668,6 +742,85 @@ export default function ChatPage() {
                 disabled={!groupName.trim()}
               >
                 Create
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Add Member Modal */}
+      {showAddMember && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center bg-black/50 z-50 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAddMember(false);
+              setUserSearch('');
+              setSearchResults([]);
+            }
+          }}
+        >
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-surface p-6 rounded-2xl shadow-2xl w-96 border border-border"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold font-outfit mb-4">Add Member to {currentTeam?.name}</h3>
+            
+            <input
+              autoFocus
+              className="w-full mb-3 px-4 py-2.5 border border-border rounded-xl bg-background outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+              placeholder="Search by name or email..."
+              value={userSearch}
+              onChange={e => handleUserSearch(e.target.value)}
+            />
+
+            {/* Search results */}
+            <div className="max-h-64 overflow-y-auto space-y-2 mb-4">
+              {searchLoading ? (
+                <div className="text-center py-4 text-foreground/40 text-sm">Searching...</div>
+              ) : searchResults.length > 0 ? (
+                searchResults.map(result => (
+                  <div 
+                    key={result._id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-background border border-border hover:border-primary/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-linear-to-br from-primary to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+                        {result.fullname.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{result.fullname}</p>
+                        <p className="text-xs text-foreground/50">{result.email}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleAddMember(result._id)}
+                      className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs hover:bg-primary-hover transition-colors"
+                    >
+                      Add
+                    </button>
+                  </div>
+                ))
+              ) : userSearch.length >= 2 ? (
+                <div className="text-center py-4 text-foreground/40 text-sm">No users found</div>
+              ) : (
+                <div className="text-center py-4 text-foreground/40 text-sm">Type to search for users</div>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <button 
+                className="px-4 py-2 rounded-xl bg-surface-hover hover:bg-surface text-foreground transition-colors"
+                onClick={() => {
+                  setShowAddMember(false);
+                  setUserSearch('');
+                  setSearchResults([]);
+                }}
+              >
+                Close
               </button>
             </div>
           </motion.div>
