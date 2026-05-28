@@ -149,8 +149,8 @@ export default function ChatPage() {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: 10,
-      // Render free tier doesn't support WebSockets — use polling in production
-      transports: process.env.NODE_ENV === 'production' ? ['polling'] : ['websocket', 'polling'],
+      // Render free tier doesn't support WebSockets — always use polling
+      transports: ['polling'],
     });
 
     socket.on('connect', () => {
