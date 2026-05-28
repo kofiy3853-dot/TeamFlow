@@ -8,10 +8,24 @@ import Link from 'next/link';
 
 export default function WorkspacePage() {
   const user = useStore((state) => state.user);
+  const initialized = useStore((state) => state.initialized);
   const [tasks, setTasks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(true);
 
   const firstName = user?.fullname?.split(' ')[0] || 'there';
+
+  // Authentication guard - wait for initialization
+  useEffect(() => {
+    if (initialized) {
+      if (!user) {
+        // Allow workspace page without login for now, or redirect if needed
+        setPageLoading(false);
+      } else {
+        setPageLoading(false);
+      }
+    }
+  }, [user, initialized]);
 
   useEffect(() => {
     fetch('/api/tasks', { credentials: 'include' })
@@ -44,6 +58,18 @@ export default function WorkspacePage() {
     REVIEW: 'bg-purple-500',
     DONE: 'bg-emerald-500',
   };
+
+  // Show loading state while initializing
+  if (!initialized || pageLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-foreground/60">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-10">

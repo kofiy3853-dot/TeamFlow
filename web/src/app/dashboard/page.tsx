@@ -27,20 +27,27 @@ interface User {
 
 export default function Dashboard() {
   const user = useStore((state) => state.user);
+  const initialized = useStore((state) => state.initialized);
   const router = useRouter();
   const { canAccessDashboard } = useRBAC();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Check authorization only after user is loaded
+  // Authentication guard - wait for initialization
   useEffect(() => {
-    if (user === null) return; // still loading
-    if (!canAccessDashboard()) {
-      router.push('/unauthorized');
+    if (initialized) {
+      if (!user) {
+        router.push('/login');
+      } else if (!canAccessDashboard()) {
+        router.push('/unauthorized');
+      } else {
+        setPageLoading(false);
+      }
     }
-  }, [user]);
+  }, [user, initialized, router, canAccessDashboard]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -99,6 +106,18 @@ export default function Dashboard() {
   ];
 
   const firstName = user?.fullname?.split(' ')[0] || 'User';
+
+  // Show loading state while initializing
+  if (!initialized || pageLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-foreground/60">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-10">

@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Users, Link, MoreHorizontal, Copy, Check, X, Loader2, Crown, Shield, UserMinus } from 'lucide-react';
 import { useRBAC } from '@/hooks/useRBAC';
+import { useStore } from '@/store/useStore';
+import { useRouter } from 'next/navigation';
 
 interface Member {
   _id: string;
@@ -31,6 +33,8 @@ const roleIcon = {
 
 export default function TeamsPage() {
   const { isAdmin, user } = useRBAC();
+  const initialized = useStore((state) => state.initialized);
+  const router = useRouter();
   const [teams, setTeams] = useState<Team[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
@@ -39,11 +43,23 @@ export default function TeamsPage() {
   const [teamDesc, setTeamDesc] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Authentication guard - wait for initialization
+  useEffect(() => {
+    if (initialized) {
+      if (!user) {
+        router.push('/login');
+      } else {
+        setPageLoading(false);
+      }
+    }
+  }, [user, initialized, router]);
 
   const fetchTeams = async () => {
     try {
@@ -151,6 +167,18 @@ export default function TeamsPage() {
     setCopiedId(team._id);
     setTimeout(() => setCopiedId(null), 2000);
   };
+
+  // Show loading state while initializing
+  if (!initialized || pageLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-foreground/60">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-10">

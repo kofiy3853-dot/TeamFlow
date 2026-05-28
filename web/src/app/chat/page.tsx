@@ -82,11 +82,13 @@ function Avatar({ name, size = 'md', online }: { name: string; size?: 'sm' | 'md
 
 export default function ChatPage() {
   const user = useStore((state) => state.user);
+  const initialized = useStore((state) => state.initialized);
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [pageLoading, setPageLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -95,6 +97,17 @@ export default function ChatPage() {
   const [userSearch, setUserSearch] = useState('');
   const [searchResults, setSearchResults] = useState<Array<{_id: string; fullname: string; email: string}>>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+
+  // Authentication guard - wait for initialization
+  useEffect(() => {
+    if (initialized) {
+      if (!user) {
+        router.push('/login');
+      } else {
+        setPageLoading(false);
+      }
+    }
+  }, [user, initialized, router]);
 
   const handleCreateGroup = async () => {
     if (!groupName.trim()) return;
@@ -408,6 +421,18 @@ export default function ChatPage() {
     : teams.find(t => t._id === selectedTeam);
   const grouped = groupMessages(messages);
 
+  // Show loading state while initializing
+  if (!initialized || pageLoading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-foreground/60">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-[calc(100vh-4rem)] gap-0 rounded-2xl overflow-hidden border border-border">
 
@@ -470,20 +495,20 @@ export default function ChatPage() {
         </div>
 
         {/* Online members */}
-        {currentTeam && selectedTeam !== 'global' && (
+        {currentTeam && selectedTeam !== 'global' && currentTeam.members && (
           <div className="border-t border-border px-4 py-3">
             <div className="flex items-center gap-2 mb-2">
               <Users className="w-3.5 h-3.5 text-foreground/40" />
-              <span className="text-xs text-foreground/40 font-medium">{currentTeam.members.length} members</span>
+              <span className="text-xs text-foreground/40 font-medium">{currentTeam.members?.length || 0} members</span>
             </div>
             <div className="flex -space-x-2">
-              {currentTeam.members.slice(0, 6).map((m: TeamMember, i: number) => (
-                <div key={m._id || i} title={m.fullname || 'Member'}
+              {currentTeam.members?.slice(0, 6).map((m: TeamMember, i: number) => (
+                <div key={m?._id || i} title={m?.fullname || 'Member'}
                   className="w-7 h-7 rounded-full bg-linear-to-br from-primary to-purple-500 border-2 border-surface flex items-center justify-center text-white text-[10px] font-bold">
-                  {(m.fullname || 'U').substring(0, 2).toUpperCase()}
+                  {(m?.fullname || 'U').substring(0, 2).toUpperCase()}
                 </div>
               ))}
-              {currentTeam.members.length > 6 && (
+              {currentTeam.members && currentTeam.members.length > 6 && (
                 <div className="w-7 h-7 rounded-full bg-surface-hover border-2 border-surface flex items-center justify-center text-foreground/50 text-[10px] font-bold">
                   +{currentTeam.members.length - 6}
                 </div>
