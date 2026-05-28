@@ -84,6 +84,7 @@ export default function ChatPage() {
   const user = useStore((state) => state.user);
   const initialized = useStore((state) => state.initialized);
   const router = useRouter();
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -450,21 +451,130 @@ export default function ChatPage() {
     );
   }
 
-  return (
-    <div className="flex h-[calc(100vh-4rem)] gap-0 rounded-2xl overflow-hidden border border-border">
+  // Close mobile sidebar when switching teams on mobile
+  const switchTeamMobile = (tid: string) => {
+    switchTeam(tid);
+    setMobileSidebarOpen(false);
+  };
 
-      {/* ── Sidebar ─────────────────────────────────────────────────── */}
+  return (
+    <div className="flex h-[calc(100vh-4rem)] gap-0 rounded-2xl overflow-hidden border border-border relative">
+
+      {/* ── Mobile backdrop ──────────────────────────────────────────── */}
+      <AnimatePresence>
+        {mobileSidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setMobileSidebarOpen(false)}
+            className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── Sidebar (desktop always visible, mobile slide-in drawer) ─── */}
+      <AnimatePresence>
+        {(mobileSidebarOpen) && (
+          <motion.div
+            key="mobile-sidebar"
+            initial={{ x: '-100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '-100%' }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            className="fixed top-0 left-0 h-full w-72 bg-surface border-r border-border flex flex-col z-40 lg:hidden shadow-2xl"
+          >
+            {/* Mobile sidebar header */}
+            <div className="px-4 py-4 border-b border-border flex items-center justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="font-outfit font-bold text-base">Team Chat</h3>
+                  {user?.role === 'ADMIN' && (
+                    <button onClick={() => { setShowCreate(true); setMobileSidebarOpen(false); }}
+                      className="p-1.5 rounded-lg hover:bg-surface-hover transition-colors" title="Create new group">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 mt-1">
+                  {connected
+                    ? <><Wifi className="w-3 h-3 text-emerald-500" /><span className="text-xs text-emerald-500">Connected</span></>
+                    : <><WifiOff className="w-3 h-3 text-foreground/40" /><span className="text-xs text-foreground/40">{error || 'Offline'}</span></>
+                  }
+                </div>
+              </div>
+              <button onClick={() => setMobileSidebarOpen(false)}
+                className="p-2 rounded-xl hover:bg-surface-hover transition-colors ml-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {/* Mobile channels list */}
+            <div className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+              <p className="text-xs font-semibold text-foreground/40 uppercase tracking-wider px-2 mb-2">Channels</p>
+              <button onClick={() => switchTeamMobile('global')}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm transition-all group mb-1 ${
+                  selectedTeam === 'global' ? 'bg-primary/10 text-primary font-medium' : 'text-foreground/60 hover:bg-surface-hover hover:text-foreground'
+                }`}>
+                <Hash className={`w-4 h-4 shrink-0 ${selectedTeam === 'global' ? 'text-primary' : 'text-foreground/30'}`} />
+                <span className="truncate">Global Chat</span>
+                {selectedTeam === 'global' && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
+              </button>
+              {teams.length === 0 ? (
+                <p className="text-xs text-foreground/30 px-3 py-2">No teams yet</p>
+              ) : (
+                teams.map((team) => {
+                  const isActive = selectedTeam === team._id;
+                  return (
+                    <button key={team._id} onClick={() => switchTeamMobile(team._id)}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm transition-all group ${
+                        isActive ? 'bg-primary/10 text-primary font-medium' : 'text-foreground/60 hover:bg-surface-hover hover:text-foreground'
+                      }`}>
+                      <Hash className={`w-4 h-4 shrink-0 ${isActive ? 'text-primary' : 'text-foreground/30'}`} />
+                      <span className="truncate">{team.name}</span>
+                      {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+            {/* Mobile member list */}
+            {currentTeam && selectedTeam !== 'global' && currentTeam.members && (
+              <div className="border-t border-border px-4 py-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="w-3.5 h-3.5 text-foreground/40" />
+                  <span className="text-xs text-foreground/40 font-medium">{currentTeam.members?.length || 0} members</span>
+                </div>
+                <div className="flex -space-x-2">
+                  {currentTeam.members?.slice(0, 6).map((m: TeamMember, i: number) => (
+                    <div key={m?._id || i} title={m?.fullname || 'Member'}
+                      className="w-7 h-7 rounded-full bg-linear-to-br from-primary to-purple-500 border-2 border-surface flex items-center justify-center text-white text-[10px] font-bold">
+                      {(m?.fullname || 'U').substring(0, 2).toUpperCase()}
+                    </div>
+                  ))}
+                  {currentTeam.members && currentTeam.members.length > 6 && (
+                    <div className="w-7 h-7 rounded-full bg-surface-hover border-2 border-surface flex items-center justify-center text-foreground/50 text-[10px] font-bold">
+                      +{currentTeam.members.length - 6}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Sidebar (desktop only, always visible) ───────────────────── */}
       <div className="w-64 shrink-0 bg-surface border-r border-border flex-col hidden lg:flex">
-        {/* Sidebar header */}
         <div className="px-4 py-4 border-b border-border">
           <div className="flex items-center justify-between mb-1">
             <h3 className="font-outfit font-bold text-base">Team Chat</h3>
             {user?.role === 'ADMIN' && (
-              <button 
-                onClick={() => setShowCreate(true)} 
-                className="p-1.5 rounded-lg hover:bg-surface-hover transition-colors"
-                title="Create new group"
-              >
+              <button onClick={() => setShowCreate(true)}
+                className="p-1.5 rounded-lg hover:bg-surface-hover transition-colors" title="Create new group">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
@@ -478,11 +588,8 @@ export default function ChatPage() {
             }
           </div>
         </div>
-
-        {/* Teams list */}
         <div className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
           <p className="text-xs font-semibold text-foreground/40 uppercase tracking-wider px-2 mb-2">Channels</p>
-
           <button onClick={() => switchTeam('global')}
             className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all group mb-1 ${
               selectedTeam === 'global' ? 'bg-primary/10 text-primary font-medium' : 'text-foreground/60 hover:bg-surface-hover hover:text-foreground'
@@ -491,7 +598,6 @@ export default function ChatPage() {
             <span className="truncate">Global Chat</span>
             {selectedTeam === 'global' && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
           </button>
-
           {teams.length === 0 ? (
             <p className="text-xs text-foreground/30 px-3 py-2">No teams yet</p>
           ) : (
@@ -510,8 +616,6 @@ export default function ChatPage() {
             })
           )}
         </div>
-
-        {/* Online members */}
         {currentTeam && selectedTeam !== 'global' && currentTeam.members && (
           <div className="border-t border-border px-4 py-3">
             <div className="flex items-center gap-2 mb-2">
@@ -539,21 +643,30 @@ export default function ChatPage() {
       <div className="flex-1 flex flex-col bg-background min-w-0">
 
         {/* Chat header */}
-        <div className="h-14 px-5 border-b border-border flex items-center justify-between shrink-0 bg-surface/50">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <button onClick={() => router.push('/dashboard')} className="p-1 rounded-full hover:bg-surface-hover transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Hash className="w-4 h-4 text-primary" />
-              </div>
+        <div className="h-14 px-4 border-b border-border flex items-center justify-between shrink-0 bg-surface/50">
+          <div className="flex items-center gap-2">
+            {/* Hamburger — mobile only */}
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-xl hover:bg-surface-hover transition-colors mr-1"
+              aria-label="Open channels"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            {/* Back button — desktop only */}
+            <button onClick={() => router.push('/dashboard')} className="hidden lg:flex p-1 rounded-full hover:bg-surface-hover transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <Hash className="w-4 h-4 text-primary" />
             </div>
-            <div>
-              <h3 className="font-semibold font-outfit text-sm leading-none">
-                {currentTeam?.name || 'Select a team'}
+            <div className="min-w-0">
+              <h3 className="font-semibold font-outfit text-sm leading-none truncate">
+                {currentTeam?.name || 'Select a channel'}
               </h3>
               {typingUsers.length > 0 ? (
                 <p className="text-xs text-primary mt-0.5 flex items-center gap-1">
@@ -562,18 +675,17 @@ export default function ChatPage() {
                       <span key={i} className={`w-1 h-1 bg-primary rounded-full animate-bounce ${i === 1 ? 'animation-delay-150' : i === 2 ? 'animation-delay-300' : ''}`} />
                     ))}
                   </span>
-                  {typingUsers.slice(0, 2).join(', ')} typing...
+                  <span className="truncate">{typingUsers.slice(0, 2).join(', ')} typing...</span>
                 </p>
               ) : (
                 <p className="text-xs text-foreground/40 mt-0.5">{selectedTeam === 'global' ? 'Everyone' : `${currentTeam?.members?.length || 0} members`}</p>
               )}
             </div>
           </div>
-          
-          <div className="flex items-center gap-2">
-            {/* Add member button - only show for non-global teams */}
+
+          <div className="flex items-center gap-1 shrink-0">
             {selectedTeam && selectedTeam !== 'global' && (
-              <button 
+              <button
                 onClick={() => setShowAddMember(true)}
                 className="p-2 rounded-lg hover:bg-surface-hover transition-colors"
                 title="Add member"
@@ -581,19 +693,6 @@ export default function ChatPage() {
                 <Users className="w-4 h-4 text-primary" />
               </button>
             )}
-            
-            {/* Mobile team switcher */}
-            <div className="lg:hidden">
-              <select 
-                value={selectedTeam} 
-                onChange={(e) => switchTeam(e.target.value)}
-                aria-label="Select a team"
-                title="Select a team"
-                className="text-sm bg-surface border border-border rounded-lg px-3 py-1.5 outline-none">
-                <option value="global">Global Chat</option>
-                {teams.map(t => <option key={t._id} value={t._id}>{t.name}</option>)}
-              </select>
-            </div>
           </div>
         </div>
 
